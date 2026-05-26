@@ -19,10 +19,10 @@ router.get('/', authenticate, async (req, res) => {
 
 router.post('/', authenticate, async (req, res) => {
   try {
-    const { plate_number, vehicle_type, entry_time, notes, is_third_party } = req.body;
+    const { plate_number, vehicle_type, entry_time, notes, third_party_company } = req.body;
     if (!plate_number || !vehicle_type) return res.status(400).json({ error: 'Plate number and vehicle type required' });
     const { data, error } = await sb.from('daily_parking')
-      .insert({ plate_number: plate_number.toUpperCase(), vehicle_type, entry_time: entry_time || new Date().toISOString(), notes: notes || '', is_third_party: is_third_party === 'on' || is_third_party === true })
+      .insert({ plate_number: plate_number.toUpperCase(), vehicle_type, entry_time: entry_time || new Date().toISOString(), notes: notes || '', is_third_party: !!third_party_company, third_party_company: third_party_company || null })
       .select('id').single();
     if (error) return res.status(400).json({ error: error.message });
     res.status(201).json({ id: data.id, message: 'Vehicle checked in' });
@@ -52,7 +52,7 @@ router.post('/:id/checkout', authenticate, async (req, res) => {
 
 router.put('/:id', authenticate, async (req, res) => {
   try {
-    const { plate_number, vehicle_type, entry_time, exit_time, amount, payment_status, parking_status, notes, currency, is_third_party } = req.body;
+    const { plate_number, vehicle_type, entry_time, exit_time, amount, payment_status, parking_status, notes, currency, third_party_company } = req.body;
     await sb.from('daily_parking').update({
       plate_number, vehicle_type, entry_time,
       exit_time: exit_time || null,
@@ -61,7 +61,8 @@ router.put('/:id', authenticate, async (req, res) => {
       parking_status: parking_status || 'parked',
       notes: notes || '',
       currency: currency || 'USD',
-      is_third_party: is_third_party === 'on' || is_third_party === true || is_third_party === 'true'
+      is_third_party: !!third_party_company,
+      third_party_company: third_party_company || null
     }).eq('id', req.params.id);
     res.json({ message: 'Updated' });
   } catch (e) { res.status(500).json({ error: e.message }); }

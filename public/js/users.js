@@ -28,7 +28,7 @@ const UsersPage = {
   async render() {
     [this.data, this.settings] = await Promise.all([API.get('/users'), API.get('/settings')]);
     const currencies = this._loadCurrencies();
-    const tpSettings = this._getThirdPartySettings();
+    const companies = this._getThirdParties();
 
     return `
       <div class="page-header">
@@ -70,15 +70,12 @@ const UsersPage = {
 
       <!-- Third Party -->
       <div class="card" style="margin-bottom:20px">
-        <div class="card-header"><span class="card-title"><i class="fas fa-building" style="color:var(--primary);margin-right:8px"></i>Third Party Settings</span></div>
-        <div class="card-body">
-          <form id="tp-settings-form"><div class="form-row cols-2">
-            <div class="form-group"><label>Company Name</label><input name="tp_name" value="${escHtml(tpSettings.name || '')}" placeholder="e.g. ABC Company"></div>
-            <div class="form-group"><label>Rate per Vehicle / Month</label><input name="tp_rate" type="number" min="0" step="any" value="${tpSettings.rate || ''}" placeholder="e.g. 150"></div>
-            <div class="form-group"><label>Currency</label>${currencySelect('tp_currency', tpSettings.currency || 'USD')}</div>
-          </div>
-          <div style="margin-top:16px"><button type="button" class="btn btn-primary" onclick="UsersPage.saveThirdPartySettings()"><i class="fas fa-save"></i> Save</button></div>
-          </form>
+        <div class="card-header">
+          <span class="card-title"><i class="fas fa-building" style="color:var(--primary);margin-right:8px"></i>Third Party Companies</span>
+          <button class="btn btn-sm btn-primary" onclick="UsersPage.showAddThirdPartyModal()"><i class="fas fa-plus"></i> Add Company</button>
+        </div>
+        <div class="card-body" style="padding:0">
+          <div id="tp-list">${this._renderThirdPartyList(companies)}</div>
         </div>
       </div>
 
@@ -188,27 +185,64 @@ const UsersPage = {
     document.getElementById('cur-list').innerHTML = this._renderCurrencyList(currencies);
   },
 
-  _getThirdPartySettings() {
+  _getThirdParties() {
     try {
-      const parsed = JSON.parse(this.settings.custom_rates || '{}');
-      return parsed.__thirdParty || {};
-    } catch { return {}; }
+      const src = window.appSettings?.custom_rates || this.settings?.custom_rates || '{}';
+      const parsed = JSON.parse(src);
+      return Array.isArray(parsed.__thirdParties) ? parsed.__thirdParties : [];
+    } catch { return []; }
   },
 
-  async saveThirdPartySettings() {
-    const form = document.getElementById('tp-settings-form');
-    const fd = {};
-    new FormData(form).forEach((v, k) => { fd[k] = v; });
-    const tp = { name: fd.tp_name || '', rate: parseFloat(fd.tp_rate) || null, currency: fd.tp_currency || 'USD' };
+  async _saveThirdParties(companies) {
     const parsed = JSON.parse(window.appSettings?.custom_rates || '{}');
-    parsed.__thirdParty = tp;
-    const settingsForm = document.getElementById('settings-form');
+    parsed.__thirdParties = companies;
+    const form = document.getElementById('settings-form');
     const data = {};
-    new FormData(settingsForm).forEach((v, k) => { data[k] = v; });
+    new FormData(form).forEach((v, k) => { data[k] = v; });
     data.custom_rates = JSON.stringify(parsed);
     await API.put('/settings', data);
     window.appSettings = { ...window.appSettings, custom_rates: data.custom_rates };
-    Toast.success('Third party settings saved');
+    this.settings = { ...this.settings, custom_rates: data.custom_rates };
+  },
+
+  _renderThirdPartyList(companies) {
+    if (!companies.length) return `<div class="empty-state" style="padding:30px"><i class="fas fa-building"></i><h4>No companies yet</h4><p>Click "Add Company" to get started.</p></div>`;
+    return `<table>
+      <thead><tr><th>Company Name</th><th>Rate / Vehicle / Month</th><th>Currency</th><th>Actions</th></tr></thead>
+      <tbody>${companies.map(c => `<tr>
+        <td><strong>${escHtml(c.name)}</strong></td>
+        <td>${fmtAmt(c.rate, c.currency)}</td>
+        <td><span class="badge badge-gray">${escHtml(c.currency)}</span></td>
+        <td class="actions"><button class="btn btn-sm btn-outline btn-icon" onclick="UsersPage.deleteThirdParty('${escHtml(c.name)}')" title="Remove"><i class="fas fa-trash"></i></button></td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+  },
+
+  showAddThirdPartyModal() {
+    Modal.show({ title: 'Add Third Party Company', size: 'sm', body: `<form id="modal-form">
+      <div class="form-row">
+        <div class="form-group"><label>Company Name *</label><input name="name" required placeholder="e.g. ABC Company"></div>
+        <div class="form-group"><label>Rate per Vehicle / Month *</label><input name="rate" type="number" min="0" step="any" required placeholder="e.g. 150"></div>
+        <div class="form-group"><label>Currency</label>${currencySelect('currency', 'USD')}</div>
+      </div>
+    </form>`, saveLabel: 'Add', onSave: async () => {
+      if (!Modal.validate()) throw new Error('Please fill required fields');
+      const data = Modal.getFormData();
+      const companies = this._getThirdParties();
+      if (companies.find(c => c.name.toLowerCase() === data.name.trim().toLowerCase())) throw new Error('Company already exists');
+      companies.push({ name: data.name.trim(), rate: parseFloat(data.rate), currency: data.currency || 'USD' });
+      await this._saveThirdParties(companies);
+      Modal.close(); Toast.success('Company added');
+      document.getElementById('tp-list').innerHTML = this._renderThirdPartyList(companies);
+    }});
+  },
+
+  async deleteThirdParty(name) {
+    if (!confirmDelete(`Remove ${name}?`)) return;
+    const companies = this._getThirdParties().filter(c => c.name !== name);
+    await this._saveThirdParties(companies);
+    Toast.success('Company removed');
+    document.getElementById('tp-list').innerHTML = this._renderThirdPartyList(companies);
   },
 
   async _saveCurrencyMap(currencies) {

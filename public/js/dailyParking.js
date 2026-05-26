@@ -51,7 +51,7 @@ const DailyParkingPage = {
     return `<table>
       <thead><tr><th>Plate</th><th>Vehicle</th><th>Entry Time</th><th>Duration</th><th>Notes</th><th>Actions</th></tr></thead>
       <tbody>${rows.map(r => `<tr>
-        <td><strong>${escHtml(r.plate_number)}</strong>${r.is_third_party ? ' <span class="badge badge-purple" style="font-size:10px">3rd Party</span>' : ''}</td>
+        <td><strong>${escHtml(r.plate_number)}</strong>${r.third_party_company ? ` <span class="badge badge-purple" style="font-size:10px">${escHtml(r.third_party_company)}</span>` : ''}</td>
         <td>${vehicleBadge(r.vehicle_type)}</td>
         <td>${fmtDateTime(r.entry_time)}</td>
         <td class="text-muted">${this.liveDuration(r.entry_time)}</td>
@@ -70,7 +70,7 @@ const DailyParkingPage = {
     return `<table>
       <thead><tr><th>Plate</th><th>Vehicle</th><th>Entry</th><th>Exit</th><th>Duration</th><th>Amount</th><th>Payment</th><th>Actions</th></tr></thead>
       <tbody>${rows.map(r => `<tr>
-        <td><strong>${escHtml(r.plate_number)}</strong>${r.is_third_party ? ' <span class="badge badge-purple" style="font-size:10px">3rd Party</span>' : ''}</td>
+        <td><strong>${escHtml(r.plate_number)}</strong>${r.third_party_company ? ` <span class="badge badge-purple" style="font-size:10px">${escHtml(r.third_party_company)}</span>` : ''}</td>
         <td>${vehicleBadge(r.vehicle_type)}</td>
         <td>${fmtDateTime(r.entry_time)}</td>
         <td>${fmtDateTime(r.exit_time)}</td>
@@ -100,7 +100,9 @@ const DailyParkingPage = {
         </div>
         <div class="form-group" style="grid-column:1/-1"><label>Entry Time</label><input name="entry_time" type="datetime-local" value="${now}"></div>
         <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea name="notes" placeholder="Optional notes…"></textarea></div>
-        <div class="form-group" style="grid-column:1/-1"><label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:600"><input type="checkbox" name="is_third_party" style="width:16px;height:16px"> <i class="fas fa-building" style="color:var(--primary)"></i> Third Party Vehicle</label></div>
+        <div class="form-group" style="grid-column:1/-1"><label><i class="fas fa-building" style="color:var(--primary);margin-right:6px"></i>Third Party Company</label>
+          <select name="third_party_company"><option value="">— Not Third Party —</option>${(() => { try { const p = JSON.parse(window.appSettings?.custom_rates||'{}'); return (Array.isArray(p.__thirdParties)?p.__thirdParties:[]).map(c=>`<option value="${escHtml(c.name)}">${escHtml(c.name)}</option>`).join(''); } catch { return ''; } })()}</select>
+        </div>
       </div>
     </form>`, saveLabel: 'Check In', onSave: async () => {
       if (!Modal.validate()) throw new Error('Plate number and vehicle type required');
