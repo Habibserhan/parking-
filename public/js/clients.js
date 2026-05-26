@@ -47,7 +47,7 @@ const ClientsPage = {
         const isExpired = v.end_date && v.end_date < today_str;
         const rowClass = isExpired ? 'row-expired' : '';
         return `<tr class="${rowClass}">
-          <td><strong>${escHtml(v.full_name)}</strong>${v.third_party_company ? ` <span class="badge badge-purple" style="font-size:10px">${escHtml(v.third_party_company)}</span>` : ''}</td>
+          <td><strong>${escHtml(v.full_name)}</strong></td>
           <td>${escHtml(v.mobile || '—')}</td>
           <td><strong>${escHtml(v.plate_number)}</strong></td>
           <td>${vehicleBadge(v.vehicle_type)}</td>
@@ -73,20 +73,11 @@ const ClientsPage = {
   },
 
   // --- Add Client ---
-  _tpOptions(selected = '') {
-    try {
-      const parsed = JSON.parse(window.appSettings?.custom_rates || '{}');
-      const companies = Array.isArray(parsed.__thirdParties) ? parsed.__thirdParties : [];
-      return `<option value="">— Not Third Party —</option>${companies.map(c => `<option value="${escHtml(c.name)}" ${c.name === selected ? 'selected' : ''}>${escHtml(c.name)}</option>`).join('')}`;
-    } catch { return '<option value="">— Not Third Party —</option>'; }
-  },
-
   showAddClient() {
     Modal.show({ title: 'Add Client', body: `<form id="modal-form">
       <div class="form-row cols-2">
         <div class="form-group" style="grid-column:1/-1"><label>Full Name *</label><input name="full_name" required placeholder="John Doe"></div>
         <div class="form-group"><label>Mobile</label><input name="mobile" placeholder="+1 234 567 8900"></div>
-        <div class="form-group"><label><i class="fas fa-building" style="color:var(--primary);margin-right:6px"></i>Third Party Company</label><select name="third_party_company">${this._tpOptions()}</select></div>
         <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea name="notes" placeholder="Any notes…"></textarea></div>
       </div>
     </form>`, onSave: async () => {
@@ -182,7 +173,6 @@ const ClientsPage = {
       <div class="form-row cols-2">
         <div class="form-group" style="grid-column:1/-1"><label>Full Name *</label><input name="full_name" required value="${escHtml(c.full_name)}"></div>
         <div class="form-group"><label>Mobile</label><input name="mobile" value="${escHtml(c.mobile || '')}"></div>
-        <div class="form-group"><label><i class="fas fa-building" style="color:var(--primary);margin-right:6px"></i>Third Party Company</label><select name="third_party_company">${this._tpOptions(c.third_party_company || '')}</select></div>
         <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea name="notes">${escHtml(c.notes || '')}</textarea></div>
       </div>
     </form>`, onSave: async () => {

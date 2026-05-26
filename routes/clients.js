@@ -17,7 +17,6 @@ function flattenVehicle(v) {
     ...v,
     full_name:           v.clients?.full_name           || '',
     mobile:              v.clients?.mobile              || '',
-    third_party_company: v.clients?.third_party_company || null,
     plan_name: v.subscription_plans?.name     || null,
     duration:  v.subscription_plans?.duration || null,
     plan_price: v.subscription_plans?.price   || null,
@@ -32,7 +31,7 @@ router.get('/all/vehicles', authenticate, async (req, res) => {
   try {
     const { search, status } = req.query;
     let query = sb.from('client_vehicles')
-      .select('*, clients(full_name, mobile, third_party_company), subscription_plans(name, duration)');
+      .select('*, clients(full_name, mobile), subscription_plans(name, duration)');
     if (status) query = query.eq('status', status);
     const { data } = await query;
 
@@ -115,10 +114,10 @@ router.get('/:id', authenticate, async (req, res) => {
 
 router.post('/', authenticate, async (req, res) => {
   try {
-    const { full_name, mobile, notes, third_party_company } = req.body;
+    const { full_name, mobile, notes } = req.body;
     if (!full_name) return res.status(400).json({ error: 'Full name required' });
     const { data, error } = await sb.from('clients')
-      .insert({ full_name, mobile: mobile || '', notes: notes || '', third_party_company: third_party_company || null })
+      .insert({ full_name, mobile: mobile || '', notes: notes || '' })
       .select('id').single();
     if (error) return res.status(400).json({ error: error.message });
     res.status(201).json({ id: data.id, message: 'Client created' });
@@ -127,8 +126,8 @@ router.post('/', authenticate, async (req, res) => {
 
 router.put('/:id', authenticate, async (req, res) => {
   try {
-    const { full_name, mobile, notes, third_party_company } = req.body;
-    await sb.from('clients').update({ full_name, mobile: mobile || '', notes: notes || '', third_party_company: third_party_company || null }).eq('id', req.params.id);
+    const { full_name, mobile, notes } = req.body;
+    await sb.from('clients').update({ full_name, mobile: mobile || '', notes: notes || '' }).eq('id', req.params.id);
     res.json({ message: 'Client updated' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

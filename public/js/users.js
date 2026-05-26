@@ -213,7 +213,10 @@ const UsersPage = {
         <td><strong>${escHtml(c.name)}</strong></td>
         <td>${fmtAmt(c.rate, c.currency)}</td>
         <td><span class="badge badge-gray">${escHtml(c.currency)}</span></td>
-        <td class="actions"><button class="btn btn-sm btn-outline btn-icon" onclick="UsersPage.deleteThirdParty('${escHtml(c.name)}')" title="Remove"><i class="fas fa-trash"></i></button></td>
+        <td class="actions">
+          <button class="btn btn-sm btn-outline btn-icon" onclick="UsersPage.showEditThirdPartyModal('${escHtml(c.name)}')" title="Edit"><i class="fas fa-edit"></i></button>
+          <button class="btn btn-sm btn-outline btn-icon" onclick="UsersPage.deleteThirdParty('${escHtml(c.name)}')" title="Remove"><i class="fas fa-trash"></i></button>
+        </td>
       </tr>`).join('')}</tbody>
     </table>`;
   },
@@ -234,6 +237,26 @@ const UsersPage = {
       await this._saveThirdParties(companies);
       Modal.close(); Toast.success('Company added');
       document.getElementById('tp-list').innerHTML = this._renderThirdPartyList(companies);
+    }});
+  },
+
+  showEditThirdPartyModal(name) {
+    const companies = this._getThirdParties();
+    const company = companies.find(c => c.name === name);
+    if (!company) return;
+    Modal.show({ title: 'Edit Third Party Company', size: 'sm', body: `<form id="modal-form">
+      <div class="form-row">
+        <div class="form-group"><label>Company Name *</label><input name="name" required value="${escHtml(company.name)}"></div>
+        <div class="form-group"><label>Rate per Vehicle / Month *</label><input name="rate" type="number" min="0" step="any" required value="${company.rate}"></div>
+        <div class="form-group"><label>Currency</label>${currencySelect('currency', company.currency || 'USD')}</div>
+      </div>
+    </form>`, saveLabel: 'Save', onSave: async () => {
+      if (!Modal.validate()) throw new Error('Please fill required fields');
+      const data = Modal.getFormData();
+      const updated = companies.map(c => c.name === name ? { name: data.name.trim(), rate: parseFloat(data.rate), currency: data.currency || 'USD' } : c);
+      await this._saveThirdParties(updated);
+      Modal.close(); Toast.success('Company updated');
+      document.getElementById('tp-list').innerHTML = this._renderThirdPartyList(updated);
     }});
   },
 
