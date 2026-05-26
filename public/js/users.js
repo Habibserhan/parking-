@@ -7,10 +7,28 @@ const UsersPage = {
   data: [],
   settings: {},
 
+  // Default currencies always pre-loaded
+  DEFAULTS: {
+    USD: { symbol: '$',  name: 'US Dollar',       dec: 2, multiplier: 1    },
+    LBP: { symbol: 'LL', name: 'Lebanese Pound',  dec: 0, multiplier: 1000 }
+  },
+
+  _loadCurrencies() {
+    try {
+      const parsed = JSON.parse(this.settings.custom_rates || '{}');
+      // Only keep object entries (currency definitions, not old number-based rates)
+      const result = {};
+      Object.entries(parsed).forEach(([k, v]) => { if (typeof v === 'object' && v !== null) result[k] = v; });
+      // If nothing saved yet, return defaults
+      if (!Object.keys(result).length) return { ...this.DEFAULTS };
+      return result;
+    } catch { return { ...this.DEFAULTS }; }
+  },
+
   async render() {
     [this.data, this.settings] = await Promise.all([API.get('/users'), API.get('/settings')]);
-    let customRates = {};
-    try { customRates = JSON.parse(this.settings.custom_rates || '{}'); } catch {}
+    const currencies = this._loadCurrencies();
+
     return `
       <div class="page-header">
         <div class="page-title"><h2>Users & Settings</h2><p>Manage system users and business settings</p></div>
@@ -28,13 +46,6 @@ const UsersPage = {
             <div class="form-group"><label>Phone</label><input name="business_phone" value="${escHtml(this.settings.business_phone || '')}" placeholder="+1 234 567 8900"></div>
             <div class="form-group" style="grid-column:1/-1"><label>Address</label><input name="business_address" value="${escHtml(this.settings.business_address || '')}" placeholder="123 Main St, City"></div>
             <div class="form-group"><label>Invoice Prefix</label><input name="invoice_prefix" value="${escHtml(this.settings.invoice_prefix || 'INV')}" placeholder="INV"></div>
-            <div class="form-group"><label>Default Currency</label>
-              <select name="currency">
-                ${Object.entries(CURRENCIES).map(([code, cfg]) =>
-                  `<option value="${code}" ${this.settings.currency===code?'selected':''}>${cfg.symbol} — ${cfg.name} (${code})</option>`
-                ).join('')}
-              </select>
-            </div>
           </div>
           <div style="margin-top:16px">
             <button type="button" class="btn btn-primary" onclick="UsersPage.saveSettings()"><i class="fas fa-save"></i> Save Settings</button>
@@ -43,30 +54,15 @@ const UsersPage = {
         </div>
       </div>
 
-      <!-- Custom Exchange Rates -->
+      <!-- Currency Management -->
       <div class="card" style="margin-bottom:20px">
         <div class="card-header">
-          <span class="card-title"><i class="fas fa-exchange-alt" style="color:var(--primary);margin-right:8px"></i>Custom Exchange Rates</span>
-          <span class="text-muted" style="font-size:12px">How many units equal 1 USD</span>
+          <span class="card-title"><i class="fas fa-coins" style="color:var(--warning);margin-right:8px"></i>Currency</span>
+          <button class="btn btn-sm btn-primary" onclick="UsersPage.showAddCurrencyModal()"><i class="fas fa-plus"></i> Add Currency</button>
         </div>
-        <div class="card-body">
-          <div style="display:flex;flex-direction:column;gap:12px;max-width:380px">
-            ${[['LBP','LL Lebanese Pound',customRates.LBP||89500],['IQD','IQD Iraqi Dinar',customRates.IQD||1310],['SYP','SYP Syrian Pound',customRates.SYP||14000]].map(([code,label,val])=>`
-            <div style="display:flex;align-items:center;gap:12px">
-              <span style="font-weight:700;font-size:13px;width:36px;color:var(--primary)">${code}</span>
-              <span style="color:var(--text-muted);font-size:13px;white-space:nowrap">1 USD =</span>
-              <input type="number" class="rate-value" data-currency="${code}" value="${val}" min="0" step="any"
-                style="flex:1;font-size:15px;font-weight:700;text-align:right">
-              <span style="color:var(--text-muted);font-size:12px;white-space:nowrap">${label}</span>
-            </div>`).join('')}
-          </div>
-          <div style="margin-top:16px">
-            <button type="button" class="btn btn-primary" onclick="UsersPage.saveCustomRates()">
-              <i class="fas fa-save"></i> Save Rates
-            </button>
-            <span id="rates-saved-msg" style="display:none;margin-left:12px;color:#16a34a;font-size:13px;font-weight:600">
-              <i class="fas fa-check-circle"></i> Saved!
-            </span>
+        <div class="card-body" style="padding:0">
+          <div id="cur-list">
+            ${this._renderCurrencyList(currencies)}
           </div>
         </div>
       </div>
@@ -80,85 +76,100 @@ const UsersPage = {
 
   init() {},
 
-  _renderRateRows(rates) {
-    const entries = Object.entries(rates);
-    if (!entries.length) return `<p class="text-muted" id="rates-empty" style="font-size:13px;margin:0">No custom rates yet. Click "Add Currency" to add one.</p>`;
-    return `
-      <div style="display:grid;grid-template-columns:auto 32px auto auto;align-items:center;gap:10px 12px;max-width:520px">
-        <div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">Currency</div>
-        <div></div>
-        <div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">1 USD =</div>
-        <div></div>
-        ${entries.map(([code, rate]) => this._rateRowHtml(code, rate)).join('')}
-      </div>`;
+  _renderCurrencyList(currencies) {
+    const entries = Object.entries(currencies);
+    if (!entries.length) return `<div class="empty-state" style="padding:30px"><i class="fas fa-coins"></i><h4>No currencies</h4><p>Add at least one currency.</p></div>`;
+    return `<table>
+      <thead><tr>
+        <th>Symbol</th><th>Code</th><th>Name</th><th>1 USD =</th><th>Actions</th>
+      </tr></thead>
+      <tbody>${entries.map(([code, cfg]) => `<tr>
+        <td><strong style="font-size:16px">${escHtml(cfg.symbol)}</strong></td>
+        <td><span class="badge badge-gray">${escHtml(code)}</span></td>
+        <td>${escHtml(cfg.name)}</td>
+        <td>
+          ${code === 'LBP'
+            ? `<span class="text-muted">—</span>`
+            : `<input type="number" class="cur-rate-input" data-code="${escHtml(code)}" value="${cfg.rate || ''}" min="0" step="any" placeholder="e.g. 89500" style="width:130px;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:600">`
+          }
+        </td>
+        <td class="actions">
+          <button class="btn btn-sm btn-outline btn-icon" onclick="UsersPage.deleteCurrency('${escHtml(code)}')" title="Remove"><i class="fas fa-trash"></i></button>
+        </td>
+      </tr>`).join('')}</tbody>
+    </table>
+    <div style="padding:16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:12px">
+      <button class="btn btn-primary" onclick="UsersPage.saveRates()"><i class="fas fa-save"></i> Save Rates</button>
+      <span id="cur-saved-msg" style="display:none;color:#16a34a;font-size:13px;font-weight:600"><i class="fas fa-check-circle"></i> Saved!</span>
+    </div>`;
   },
 
-  _rateRowHtml(code = '', rate = '') {
-    return `
-      <select class="rate-currency" style="font-size:13px;font-weight:600">
-        <option value="">— Select —</option>
-        ${Object.entries(CURRENCIES).map(([c, cfg]) =>
-          `<option value="${c}" ${c === code ? 'selected' : ''}>${cfg.symbol} — ${cfg.name} (${c})</option>`
-        ).join('')}
-      </select>
-      <span style="font-size:16px;color:var(--text-muted);text-align:center">=</span>
-      <input type="number" class="rate-value" value="${escHtml(String(rate))}" min="0" step="any"
-        placeholder="e.g. 89500" style="font-size:15px;font-weight:700;text-align:right">
-      <button type="button" class="btn btn-sm btn-outline btn-icon rate-row" onclick="UsersPage.removeRateRow(this)" title="Remove">
-        <i class="fas fa-trash"></i>
-      </button>`;
-  },
-
-  addRateRow() {
-    const list = document.getElementById('custom-rates-list');
-    const empty = document.getElementById('rates-empty');
-    if (empty) {
-      empty.remove();
-      // Build the grid wrapper first
-      list.innerHTML = `
-        <div id="rates-grid" style="display:grid;grid-template-columns:auto 32px auto auto;align-items:center;gap:10px 12px;max-width:520px">
-          <div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">Currency</div>
-          <div></div>
-          <div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">1 USD =</div>
-          <div></div>
-        </div>`;
-    }
-    const grid = document.getElementById('rates-grid') || list.querySelector('div[style*="grid"]');
-    grid.insertAdjacentHTML('beforeend', this._rateRowHtml());
-  },
-
-  removeRateRow(btn) {
-    // Each row is 4 sibling elements in the grid; btn is the 4th
-    const siblings = [btn.previousElementSibling, btn.previousElementSibling?.previousElementSibling, btn.previousElementSibling?.previousElementSibling?.previousElementSibling, btn];
-    siblings.forEach(el => el?.remove());
-    const grid = document.getElementById('rates-grid') || document.querySelector('#custom-rates-list div[style*="grid"]');
-    if (grid && !grid.querySelector('.rate-currency')) {
-      document.getElementById('custom-rates-list').innerHTML =
-        `<p class="text-muted" id="rates-empty" style="font-size:13px;margin:0">No custom rates yet. Click "Add Currency" to add one.</p>`;
-    }
-  },
-
-  _collectCustomRates() {
-    const rates = {};
-    document.querySelectorAll('.rate-value[data-currency]').forEach(input => {
-      const code = input.dataset.currency;
+  async saveRates() {
+    const currencies = this._loadCurrencies();
+    document.querySelectorAll('.cur-rate-input').forEach(input => {
+      const code = input.dataset.code;
       const rate = parseFloat(input.value);
-      if (code && rate > 0) rates[code] = rate;
+      if (code && currencies[code]) currencies[code].rate = rate > 0 ? rate : null;
     });
-    return rates;
+    await this._saveCurrencyMap(currencies);
+    document.getElementById('cur-list').innerHTML = this._renderCurrencyList(currencies);
+    const msg = document.getElementById('cur-saved-msg');
+    if (msg) { msg.style.display = 'inline'; setTimeout(() => msg.style.display = 'none', 3000); }
+    Toast.success('Rates saved');
   },
 
-  async saveCustomRates() {
-    const customRates = this._collectCustomRates();
+  showAddCurrencyModal() {
+    Modal.show({ title: 'Add Currency', size: 'sm', body: `<form id="modal-form">
+      <div class="form-row">
+        <div class="form-group"><label>Currency Code *</label><input name="code" required placeholder="e.g. EUR, SAR, AED" style="text-transform:uppercase" maxlength="10"></div>
+        <div class="form-group"><label>Symbol *</label><input name="symbol" required placeholder="e.g. €, SAR, AED"></div>
+        <div class="form-group"><label>Name *</label><input name="name" required placeholder="e.g. Euro"></div>
+        <div class="form-group"><label>Decimal Places</label>
+          <select name="dec">
+            <option value="2" selected>2 (e.g. $ 10.00)</option>
+            <option value="0">0 (e.g. LL 10,000)</option>
+            <option value="3">3 (e.g. KD 10.000)</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Display Multiplier</label>
+          <select name="multiplier">
+            <option value="1" selected>1 — show as entered</option>
+            <option value="1000">1000 — enter 150 shows 150,000</option>
+          </select>
+        </div>
+        <div class="form-group"><label>1 USD = ? (exchange rate)</label><input name="rate" type="number" min="0" step="any" placeholder="e.g. 89500"></div>
+      </div>
+    </form>`, saveLabel: 'Add', onSave: async () => {
+      if (!Modal.validate()) throw new Error('Please fill all required fields');
+      const data = Modal.getFormData();
+      const code = data.code.trim().toUpperCase();
+      if (!code || !data.symbol) throw new Error('Code and symbol are required');
+      const currencies = this._loadCurrencies();
+      const rate = parseFloat(data.rate);
+      currencies[code] = { symbol: data.symbol.trim(), name: data.name.trim(), dec: Number(data.dec), multiplier: Number(data.multiplier), rate: rate > 0 ? rate : null };
+      await this._saveCurrencyMap(currencies);
+      Modal.close();
+      Toast.success('Currency added');
+      document.getElementById('cur-list').innerHTML = this._renderCurrencyList(currencies);
+    }});
+  },
+
+  async deleteCurrency(code) {
+    if (!confirmDelete(`Remove ${code} from the currency list?`)) return;
+    const currencies = this._loadCurrencies();
+    delete currencies[code];
+    await this._saveCurrencyMap(currencies);
+    Toast.success('Currency removed');
+    document.getElementById('cur-list').innerHTML = this._renderCurrencyList(currencies);
+  },
+
+  async _saveCurrencyMap(currencies) {
     const form = document.getElementById('settings-form');
     const data = {};
     new FormData(form).forEach((v, k) => { data[k] = v; });
-    data.custom_rates = JSON.stringify(customRates);
+    data.custom_rates = JSON.stringify(currencies);
     await API.put('/settings', data);
     window.appSettings = { ...window.appSettings, custom_rates: data.custom_rates };
-
-    const msg = document.getElementById('rates-saved-msg');
-    if (msg) { msg.style.display = 'inline'; setTimeout(() => { msg.style.display = 'none'; }, 3000); }
   },
 
   renderTable(rows) {
@@ -226,7 +237,7 @@ const UsersPage = {
     const form = document.getElementById('settings-form');
     const data = {};
     new FormData(form).forEach((v, k) => { data[k] = v; });
-    data.custom_rates = JSON.stringify(this._collectCustomRates());
+    data.custom_rates = window.appSettings?.custom_rates || JSON.stringify(this.DEFAULTS);
     await API.put('/settings', data);
     window.appSettings = { ...window.appSettings, ...data };
     const nameEl = document.getElementById('sidebar-business-name');

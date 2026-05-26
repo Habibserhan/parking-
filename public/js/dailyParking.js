@@ -134,7 +134,7 @@ const DailyParkingPage = {
       </form>`, saveLabel: 'Check Out', onSave: async () => {
       if (!Modal.validate()) throw new Error('Amount is required');
       const data = Modal.getFormData();
-      await API.post(`/daily-parking/${id}/checkout`, { amount: Number(data.amount), payment_status: data.payment_status });
+      await API.post(`/daily-parking/${id}/checkout`, { amount: Number(data.amount), payment_status: data.payment_status, currency: data.currency || 'USD' });
       Modal.close(); Toast.success('Vehicle checked out'); Router.navigate('daily-parking');
     }});
   },

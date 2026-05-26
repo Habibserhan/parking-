@@ -186,7 +186,7 @@ const CURRENCIES = {
   USD: { symbol: '$',     dec: 2, name: 'US Dollar' },
   EUR: { symbol: '€',     dec: 2, name: 'Euro' },
   GBP: { symbol: '£',     dec: 2, name: 'British Pound' },
-  LBP: { symbol: 'LL',    dec: 0, name: 'Lebanese Pound' },
+  LBP: { symbol: 'LL',    dec: 0, name: 'Lebanese Pound', multiplier: 1000 },
   LYD: { symbol: 'LD',    dec: 3, name: 'Libyan Dinar' },
   AED: { symbol: 'AED',   dec: 2, name: 'UAE Dirham' },
   SAR: { symbol: 'SAR',   dec: 2, name: 'Saudi Riyal' },
@@ -221,26 +221,40 @@ function fmtCurrency(v, currency) {
   return `${cfg.symbol} ${formatted}`;
 }
 
+// Get the active currency map from settings (falls back to USD+LBP)
+function _getCurrencyMap() {
+  try {
+    const parsed = JSON.parse(window.appSettings?.custom_rates || '{}');
+    const result = {};
+    Object.entries(parsed).forEach(([k, v]) => { if (typeof v === 'object' && v !== null) result[k] = v; });
+    if (Object.keys(result).length) return result;
+  } catch {}
+  return {
+    USD: { symbol: '$',  name: 'US Dollar',      dec: 2, multiplier: 1    },
+    LBP: { symbol: 'LL', name: 'Lebanese Pound', dec: 0, multiplier: 1000 }
+  };
+}
+
 // Format amount using a specific currency stored per-record
 function fmtAmt(amount, currency) {
   const cur = currency || 'USD';
-  const cfg = CURRENCIES[cur] || { symbol: cur, dec: 2 };
-  const n = Number(amount) || 0;
+  const map = _getCurrencyMap();
+  const cfg = map[cur] || CURRENCIES[cur] || { symbol: cur, dec: 2, multiplier: 1 };
+  const multiplier = cfg.multiplier || 1;
+  const n = (Number(amount) || 0) * multiplier;
   return cfg.symbol + ' ' + new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: cfg.dec,
-    maximumFractionDigits: cfg.dec
+    minimumFractionDigits: cfg.dec ?? 2,
+    maximumFractionDigits: cfg.dec ?? 2
   }).format(n);
 }
 
-// Build <select> for per-record currency: always USD + LBP + any custom ones saved in settings
+// Build <select> for per-record currency using the active currency list
 function currencySelect(name, selected) {
   const sel = selected || 'USD';
-  const custom = (() => { try { return JSON.parse(window.appSettings?.custom_rates || '{}'); } catch { return {}; } })();
-  const codes = ['USD', 'LBP', ...Object.keys(custom).filter(c => c !== 'USD' && c !== 'LBP')];
-  const opts = codes.map(c => {
-    const cfg = CURRENCIES[c] || { symbol: c, name: c };
-    return `<option value="${c}" ${c === sel ? 'selected' : ''}>${cfg.symbol} — ${cfg.name || c}</option>`;
-  }).join('');
+  const map = _getCurrencyMap();
+  const opts = Object.entries(map).map(([c, cfg]) =>
+    `<option value="${c}" ${c === sel ? 'selected' : ''}>${cfg.symbol} — ${cfg.name || c}</option>`
+  ).join('');
   return `<select name="${name}">${opts}</select>`;
 }
 

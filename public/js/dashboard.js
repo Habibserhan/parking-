@@ -59,7 +59,12 @@ const DashboardPage = {
   },
 
   _getLbpRate() {
-    try { const r = JSON.parse(window.appSettings?.custom_rates || '{}'); return r.LBP || 89500; } catch { return 89500; }
+    try {
+      const r = JSON.parse(window.appSettings?.custom_rates || '{}');
+      if (r.USD && typeof r.USD === 'object' && r.USD.rate) return Number(r.USD.rate);
+      if (typeof r.LBP === 'number') return r.LBP;
+      return 89500;
+    } catch { return 89500; }
   },
 
   _fmtMoney(value) {
