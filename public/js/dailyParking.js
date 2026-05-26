@@ -113,17 +113,12 @@ const DailyParkingPage = {
   showCheckOut(id) {
     const record = this.data.find(r => r.id === id);
     const mins = Math.round((Date.now() - new Date(record?.entry_time)) / 60000);
-    const vRates = getParkingRates()[record?.vehicle_type] || {};
-    const unitOpts = [
-      { val: 60, label: 'Per Hour',   key: 'rate_60' },
-      { val: 30, label: 'Per 30 min', key: 'rate_30' },
-      { val: 10, label: 'Per 10 min', key: 'rate_10' },
-    ].filter(u => vRates[u.key]);
-    const defaultUnit = unitOpts.length ? unitOpts[0].val : 60;
-    const calc = calcParkingAmount(record?.vehicle_type, mins, defaultUnit);
-    const unitSelectHtml = unitOpts.length
-      ? `<select id="checkout-unit" onchange="DailyParkingPage.recalcCheckout(${id},${mins})">${unitOpts.map(u => `<option value="${u.val}" ${u.val===defaultUnit?'selected':''}>${u.label} — ${fmtAmt(vRates[u.key], vRates.currency||'USD')}</option>`).join('')}</select>`
-      : `<select id="checkout-unit"><option value="0">No rate set</option></select>`;
+    const calc = calcParkingAmount(record?.vehicle_type, mins);
+    const autoAmount = calc ? calc.amount : 0;
+    const autoCurrency = calc ? calc.currency : 'USD';
+    const calcNote = calc
+      ? `<div style="margin-top:6px;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--text-muted)"><i class="fas fa-calculator" style="margin-right:4px"></i>${calc.hours} hr × rate = ${fmtAmt(calc.amount, calc.currency)}</div>`
+      : `<div style="margin-top:6px;font-size:12px;color:var(--text-muted)">No rate set — enter manually</div>`;
     Modal.show({ title: `Check Out — ${record?.plate_number}`, body: `
       <div style="background:var(--bg);border-radius:8px;padding:14px;margin-bottom:16px">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -133,12 +128,8 @@ const DailyParkingPage = {
       </div>
       <form id="modal-form">
         <div class="form-row cols-2">
-          <div class="form-group" style="grid-column:1/-1"><label>Billing Unit</label>${unitSelectHtml}</div>
-          <div class="form-group"><label>Amount *</label>
-            <input name="amount" id="checkout-amount" type="number" step="0.01" min="0" required placeholder="0.00" value="${calc ? calc.amount : 0}">
-            <div id="checkout-note" style="margin-top:6px;font-size:12px;color:var(--text-muted)">${calc ? `<i class="fas fa-calculator"></i> ${calc.units} × ${calc.unitLabel} = ${fmtAmt(calc.amount, calc.currency)}` : 'Enter amount manually'}</div>
-          </div>
-          <div class="form-group"><label>Currency</label><div id="checkout-cur">${currencySelect('currency', calc ? calc.currency : 'USD')}</div></div>
+          <div class="form-group"><label>Amount *</label><input name="amount" type="number" step="0.01" min="0" required placeholder="0.00" value="${autoAmount}">${calcNote}</div>
+          <div class="form-group"><label>Currency</label>${currencySelect('currency', autoCurrency)}</div>
           <div class="form-group"><label>Payment Status</label>
             <select name="payment_status"><option value="paid">Paid</option><option value="unpaid">Unpaid</option></select>
           </div>
@@ -149,18 +140,6 @@ const DailyParkingPage = {
       await API.post(`/daily-parking/${id}/checkout`, { amount: Number(data.amount), payment_status: data.payment_status, currency: data.currency || 'USD' });
       Modal.close(); Toast.success('Vehicle checked out'); Router.navigate('daily-parking');
     }});
-  },
-
-  recalcCheckout(id, mins) {
-    const record = this.data.find(r => r.id === id);
-    const unit = Number(document.getElementById('checkout-unit')?.value);
-    if (!unit) return;
-    const calc = calcParkingAmount(record?.vehicle_type, mins, unit);
-    if (calc) {
-      document.getElementById('checkout-amount').value = calc.amount;
-      document.getElementById('checkout-note').innerHTML = `<i class="fas fa-calculator"></i> ${calc.units} × ${calc.unitLabel} = ${fmtAmt(calc.amount, calc.currency)}`;
-      document.getElementById('checkout-cur').innerHTML = currencySelect('currency', calc.currency);
-    }
   },
 
   showEdit(id) {
