@@ -43,3 +43,5 @@ app.listen(PORT, () => {
   console.log('  Employee: employee@parking.com / emp123');
   console.log('==============================================\n');
 });
+
+module.exports = app;
