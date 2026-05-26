@@ -118,7 +118,7 @@ const DailyParkingPage = {
     const autoCurrency = calc ? calc.currency : 'USD';
     const ratePerHour = getParkingRates()[record?.vehicle_type]?.rate;
     const calcNote = calc
-      ? `<div style="margin-top:6px;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--text-muted)"><i class="fas fa-calculator" style="margin-right:4px"></i>${calc.hours} hr × ${fmtAmt(ratePerHour, calc.currency)} = ${fmtAmt(calc.amount, calc.currency)}</div>`
+      ? `<div style="margin-top:6px;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--text-muted)"><i class="fas fa-calculator" style="margin-right:4px"></i>${fmtDuration(mins)} × ${fmtAmt(ratePerHour, calc.currency)}/hr = ${fmtAmt(calc.amount, calc.currency)}</div>`
       : `<div style="margin-top:6px;font-size:12px;color:var(--text-muted)">No rate set — enter manually</div>`;
     Modal.show({ title: `Check Out — ${record?.plate_number}`, body: `
       <div style="background:var(--bg);border-radius:8px;padding:14px;margin-bottom:16px">

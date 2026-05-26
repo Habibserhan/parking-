@@ -271,8 +271,8 @@ function calcParkingAmount(vehicle_type, duration_minutes) {
   const rates = getParkingRates();
   const r = rates[vehicle_type];
   if (!r || !r.rate) return null;
-  const hours = Math.max(Math.floor(duration_minutes / 60), 1);
-  const amount = hours * Number(r.rate);
+  const hours = Math.max(duration_minutes / 60, 1/60);
+  const amount = Math.round(hours * Number(r.rate) * 100) / 100;
   return { amount, currency: r.currency || 'USD', hours };
 }
 
