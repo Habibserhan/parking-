@@ -370,12 +370,13 @@ function renderUserInfo() {
 }
 
 function showLogin() {
-  document.getElementById('login-page').style.display = 'flex';
+  document.getElementById('login-page').style.display = '';
+  document.getElementById('login-page').classList.add('active');
   document.getElementById('app').classList.remove('active');
 }
 
 function showApp() {
-  document.getElementById('login-page').style.display = 'none';
+  document.getElementById('login-page').classList.remove('active');
   document.getElementById('app').classList.add('active');
   renderUserInfo();
   loadSettings();

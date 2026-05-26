@@ -30,8 +30,11 @@ body {
 
 /* ======== LOGIN PAGE ======== */
 #login-page {
-  display: flex;
+  display: none;
   min-height: 100vh;
+}
+#login-page.active {
+  display: flex;
 }
 
 /* ---------- HERO LEFT ---------- */
@@ -247,7 +250,7 @@ body {
 
 /* ---------- RESPONSIVE: LOGIN ---------- */
 @media (max-width: 980px) {
-  #login-page {
+  #login-page.active {
     display: block;
     background: #07070e;
     min-height: 100vh;
