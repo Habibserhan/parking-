@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Parking Management System</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ===== LOGIN PAGE ===== -->
+<div id="login-page" style="display:none">
+
+  <!-- Hero Left -->
+  <div class="lp-hero">
+    <div class="lp-hero-inner">
+
+      <div class="lp-brand">
+        <div class="lp-brand-ic">
+          <svg viewBox="0 0 40 40" width="40" height="40" fill="none">
+            <path d="M20 2C11.2 2 4 9.2 4 18c0 11.3 16 26 16 26S36 29.3 36 18C36 9.2 28.8 2 20 2z" fill="#f59e0b"/>
+            <circle cx="20" cy="17" r="9" fill="#111"/>
+            <text x="20" y="21" text-anchor="middle" fill="#f59e0b" font-size="12" font-weight="900" font-family="Arial,sans-serif">P</text>
+          </svg>
+        </div>
+        <div>
+          <div class="lp-brand-name">Park &amp; <span>Shine</span></div>
+          <div class="lp-brand-sub">PARKING &nbsp;·&nbsp; WASH &nbsp;·&nbsp; CARE</div>
+        </div>
+      </div>
+
+      <div class="lp-spacer"></div>
+
+      <div class="lp-headline">
+        <h1>Park. Wash.<br><em>We Care.</em></h1>
+        <p>Your one-stop solution for secure parking<br>and premium car wash services.</p>
+      </div>
+
+      <div class="lp-feats">
+        <div class="lp-feat">
+          <div class="lp-feat-ic"><i class="fas fa-shield-alt"></i></div>
+          <div>
+            <strong>Secure Parking</strong>
+            <span>Safe and monitored parking for your peace of mind.</span>
+          </div>
+        </div>
+        <div class="lp-feat">
+          <div class="lp-feat-ic"><i class="fas fa-tint"></i></div>
+          <div>
+            <strong>Premium Wash</strong>
+            <span>Top-quality car wash for a showroom shine.</span>
+          </div>
+        </div>
+        <div class="lp-feat">
+          <div class="lp-feat-ic"><i class="fas fa-heart"></i></div>
+          <div>
+            <strong>Trusted &amp; Safe</strong>
+            <span>We care for your car like our own.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="lp-help">
+        <i class="fas fa-headset"></i>
+        <div>
+          <strong>Need Help?</strong>
+          <span>71434159 / 71361852</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Card Right -->
+  <div class="lp-right">
+    <div class="lp-card">
+
+      <div class="lp-card-head">
+        <div class="lp-card-ic">
+          <svg viewBox="0 0 56 64" width="56" height="64" fill="none">
+            <path d="M28 0C14.7 0 4 10.7 4 24c0 17 24 40 24 40S52 41 52 24C52 10.7 41.3 0 28 0z" fill="#f59e0b"/>
+            <circle cx="28" cy="23" r="14" fill="#111"/>
+            <text x="28" y="28" text-anchor="middle" fill="#f59e0b" font-size="17" font-weight="900" font-family="Arial,sans-serif">P</text>
+          </svg>
+        </div>
+        <h2>Welcome Back!</h2>
+        <p>Login to manage your parking and<br>car wash services.</p>
+      </div>
+
+      <form id="login-form">
+        <div class="lp-field">
+          <label>Email Address</label>
+          <div class="lp-inp-wrap">
+            <i class="fas fa-envelope lp-inp-icon"></i>
+            <input type="email" name="email" placeholder="Enter your email" required autocomplete="email">
+          </div>
+        </div>
+
+        <div class="lp-field">
+          <label>Password</label>
+          <div class="lp-inp-wrap">
+            <i class="fas fa-lock lp-inp-icon"></i>
+            <input type="password" name="password" placeholder="Enter your password" required autocomplete="current-password">
+          </div>
+        </div>
+
+        <button type="submit" class="lp-btn">
+          Login &nbsp;<i class="fas fa-arrow-right"></i>
+        </button>
+        <div id="login-error" class="lp-err"></div>
+      </form>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- ===== MAIN APP ===== -->
+<div id="app">
+
+  <!-- Sidebar Overlay (mobile) -->
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <!-- ===== SIDEBAR ===== -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <i class="fas fa-parking"></i>
+      <span id="sidebar-business-name">Parking Manager</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section">Main</div>
+      <div class="nav-item active" data-page="dashboard">
+        <i class="fas fa-tachometer-alt"></i> Dashboard
+      </div>
+
+      <div class="nav-section">Parking</div>
+      <div class="nav-item" data-page="clients">
+        <i class="fas fa-users"></i> Clients
+      </div>
+      <div class="nav-item" data-page="plans">
+        <i class="fas fa-tags"></i> Subscription Plans
+      </div>
+      <div class="nav-item" data-page="daily-parking">
+        <i class="fas fa-car"></i> Daily Parking
+      </div>
+
+      <div class="nav-section">Services</div>
+      <div class="nav-item" data-page="services">
+        <i class="fas fa-shower"></i> Services
+      </div>
+      <div class="nav-item" data-page="transactions">
+        <i class="fas fa-soap"></i> Daily Services
+      </div>
+
+      <div class="nav-section">Finance</div>
+      <div class="nav-item" data-page="expenses" data-admin>
+        <i class="fas fa-receipt"></i> Expenses
+      </div>
+      <div class="nav-item" data-page="invoices">
+        <i class="fas fa-file-invoice-dollar"></i> Invoices
+      </div>
+      <div class="nav-item" data-page="unpaid">
+        <i class="fas fa-exclamation-circle"></i> Unpaid Subscriptions
+      </div>
+
+      <div class="nav-section">Analytics</div>
+      <div class="nav-item" data-page="reports">
+        <i class="fas fa-chart-bar"></i> Reports
+      </div>
+
+      <div class="nav-section">Admin</div>
+      <div class="nav-item" data-page="users" data-admin>
+        <i class="fas fa-user-cog"></i> Users & Settings
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar" id="user-avatar">A</div>
+        <div class="user-details">
+          <div class="user-name" id="user-name">Admin</div>
+          <div class="user-role" id="user-role">admin</div>
+        </div>
+        <button class="btn-logout" id="btn-logout" title="Logout">
+          <i class="fas fa-sign-out-alt"></i>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===== MAIN CONTENT ===== -->
+  <div class="main-content">
+    <!-- Top Bar -->
+    <header class="topbar">
+      <button class="hamburger" id="hamburger"><i class="fas fa-bars"></i></button>
+      <div class="topbar-title" id="topbar-title">Dashboard</div>
+      <div class="topbar-right">
+        <span id="topbar-date" class="text-muted" style="font-size:13px"></span>
+      </div>
+    </header>
+
+    <!-- Page Content -->
+    <main id="page-content">
+      <div class="loading"><div class="spinner"></div> Loading…</div>
+    </main>
+  </div>
+
+</div>
+
+<!-- Toast Container -->
+<div id="toast-container"></div>
+
+<!-- ===== SCRIPTS ===== -->
+<script src="/js/app.js"></script>
+<script src="/js/dashboard.js"></script>
+<script src="/js/plans.js"></script>
+<script src="/js/clients.js"></script>
+<script src="/js/dailyParking.js"></script>
+<script src="/js/services.js"></script>
+<script src="/js/transactions.js"></script>
+<script src="/js/expenses.js"></script>
+<script src="/js/invoices.js"></script>
+<script src="/js/unpaid.js"></script>
+<script src="/js/reports.js"></script>
+<script src="/js/users.js"></script>
+
+<script>
+  // Show today's date in topbar
+  document.getElementById('topbar-date').textContent = new Date().toLocaleDateString('en-US', { weekday:'short', year:'numeric', month:'short', day:'numeric' });
+</script>
+
+</body>
+</html>
