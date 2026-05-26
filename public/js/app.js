@@ -272,7 +272,7 @@ function calcParkingAmount(vehicle_type, duration_minutes) {
   const r = rates[vehicle_type];
   if (!r || !r.rate) return null;
   const unit = Number(r.unit_minutes) || 60;
-  const units = Math.ceil(Math.max(duration_minutes, 1) / unit);
+  const units = Math.max(Math.floor(duration_minutes / unit), 1);
   const amount = units * Number(r.rate);
   const unitLabel = unit === 60 ? 'hr' : unit === 30 ? '30 min' : `${unit} min`;
   return { amount, currency: r.currency || 'USD', units, unitLabel };
