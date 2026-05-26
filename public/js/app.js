@@ -266,14 +266,16 @@ function getParkingRates() {
   } catch { return {}; }
 }
 
-// Returns null if no rate configured, otherwise { amount, currency, units, unitLabel, breakdown }
-function calcParkingAmount(vehicle_type, duration_minutes) {
+// Returns null if no rate configured, otherwise { amount, currency, units, unitLabel }
+function calcParkingAmount(vehicle_type, duration_minutes, unit_minutes) {
   const rates = getParkingRates();
   const r = rates[vehicle_type];
-  if (!r || !r.rate) return null;
-  const unit = Number(r.unit_minutes) || 60;
+  if (!r) return null;
+  const unit = Number(unit_minutes) || 60;
+  const rateVal = Number(r[`rate_${unit}`]);
+  if (!rateVal) return null;
   const units = Math.max(Math.floor(duration_minutes / unit), 1);
-  const amount = units * Number(r.rate);
+  const amount = units * rateVal;
   const unitLabel = unit === 60 ? 'hr' : unit === 30 ? '30 min' : `${unit} min`;
   return { amount, currency: r.currency || 'USD', units, unitLabel };
 }

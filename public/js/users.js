@@ -194,22 +194,24 @@ const UsersPage = {
   },
 
   _renderParkingRates(rates) {
+    const inp = (type, unit, val) =>
+      `<input type="number" class="pr-rate-input" data-type="${escHtml(type)}" data-unit="${unit}" value="${val || ''}" min="0" step="any" placeholder="—" style="width:90px;padding:6px 8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:600">`;
     return `<table>
-      <thead><tr><th>Vehicle Type</th><th>Rate per unit <small style="font-weight:400;color:var(--text-muted)">(LBP: enter thousands — 200 = LL 200,000)</small></th><th>Currency</th><th>Billing unit</th></tr></thead>
+      <thead><tr><th>Vehicle Type</th><th>Per Hour</th><th>Per 30 min</th><th>Per 10 min</th><th>Currency</th></tr></thead>
       <tbody>${VEHICLE_TYPES.map(vt => {
         const r = rates[vt.value] || {};
         return `<tr>
           <td><i class="fas ${vt.icon}" style="margin-right:6px;color:var(--primary)"></i>${vt.label}</td>
-          <td><input type="number" class="pr-rate-input" data-type="${escHtml(vt.value)}" value="${r.rate || ''}" min="0" step="any" placeholder="e.g. 200" style="width:130px;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:600"></td>
+          <td>${inp(vt.value, 60, r.rate_60)}</td>
+          <td>${inp(vt.value, 30, r.rate_30)}</td>
+          <td>${inp(vt.value, 10, r.rate_10)}</td>
           <td>${currencySelect('pr_currency_' + vt.value, r.currency || 'USD')}</td>
-          <td><select class="pr-unit-sel" data-type="${escHtml(vt.value)}" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-            <option value="60" ${(r.unit_minutes||60)==60?'selected':''}>Per hour</option>
-            <option value="30" ${r.unit_minutes==30?'selected':''}>Per 30 min</option>
-            <option value="10" ${r.unit_minutes==10?'selected':''}>Per 10 min</option>
-          </select></td>
         </tr>`;
       }).join('')}</tbody>
     </table>
+    <div style="padding:12px 16px;background:var(--bg);font-size:12px;color:var(--text-muted);border-top:1px solid var(--border)">
+      <i class="fas fa-info-circle"></i> LBP: enter in thousands — 200 = LL 200,000. Leave blank to disable that billing unit.
+    </div>
     <div style="padding:16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:12px">
       <button class="btn btn-primary" onclick="UsersPage.saveParkingRates()"><i class="fas fa-save"></i> Save Rates</button>
       <span id="pr-saved-msg" style="display:none;color:#16a34a;font-size:13px;font-weight:600"><i class="fas fa-check-circle"></i> Saved!</span>
@@ -218,12 +220,11 @@ const UsersPage = {
 
   async saveParkingRates() {
     const rates = {};
-    document.querySelectorAll('.pr-rate-input').forEach(input => {
-      const type = input.dataset.type;
-      const rate = parseFloat(input.value);
+    VEHICLE_TYPES.forEach(vt => {
+      const type = vt.value;
+      const get = (unit) => { const v = parseFloat(document.querySelector(`.pr-rate-input[data-type="${type}"][data-unit="${unit}"]`)?.value); return v > 0 ? v : null; };
       const currSel = document.querySelector(`select[name="pr_currency_${type}"]`);
-      const unitSel = document.querySelector(`.pr-unit-sel[data-type="${type}"]`);
-      rates[type] = { rate: rate > 0 ? rate : null, currency: currSel?.value || 'USD', unit_minutes: Number(unitSel?.value) || 60 };
+      rates[type] = { currency: currSel?.value || 'USD', rate_60: get(60), rate_30: get(30), rate_10: get(10) };
     });
     const currencies = this._loadCurrencies();
     const allData = { ...currencies, __parkingRates: rates };
