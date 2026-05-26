@@ -114,8 +114,10 @@ const DailyParkingPage = {
     const record = this.data.find(r => r.id === id);
     const mins = Math.round((Date.now() - new Date(record?.entry_time)) / 60000);
     const calc = calcParkingAmount(record?.vehicle_type, mins);
-    const autoAmount = calc ? calc.amount : 0;
     const autoCurrency = calc ? calc.currency : 'USD';
+    const curCfg = _getCurrencyMap()[autoCurrency] || {};
+    const multiplier = curCfg.multiplier || 1;
+    const inputAmount = calc ? Math.round(calc.amount * multiplier) : 0;
     const ratePerHour = getParkingRates()[record?.vehicle_type]?.rate;
     const calcNote = calc
       ? `<div style="margin-top:6px;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--text-muted)"><i class="fas fa-calculator" style="margin-right:4px"></i>${fmtDuration(mins)} × ${fmtAmt(ratePerHour, calc.currency)}/hr = ${fmtAmt(calc.amount, calc.currency)}</div>`
@@ -129,7 +131,7 @@ const DailyParkingPage = {
       </div>
       <form id="modal-form">
         <div class="form-row cols-2">
-          <div class="form-group"><label>Amount *</label><input name="amount" type="number" step="0.01" min="0" required placeholder="0.00" value="${autoAmount}">${calcNote}</div>
+          <div class="form-group"><label>Amount *</label><input name="amount" type="number" step="1" min="0" required placeholder="0" value="${inputAmount}">${calcNote}</div>
           <div class="form-group"><label>Currency</label>${currencySelect('currency', autoCurrency)}</div>
           <div class="form-group"><label>Payment Status</label>
             <select name="payment_status"><option value="paid">Paid</option><option value="unpaid">Unpaid</option></select>
@@ -138,7 +140,9 @@ const DailyParkingPage = {
       </form>`, saveLabel: 'Check Out', onSave: async () => {
       if (!Modal.validate()) throw new Error('Amount is required');
       const data = Modal.getFormData();
-      await API.post(`/daily-parking/${id}/checkout`, { amount: Number(data.amount), payment_status: data.payment_status, currency: data.currency || 'USD' });
+      const saveCfg = _getCurrencyMap()[data.currency] || {};
+      const saveMult = saveCfg.multiplier || 1;
+      await API.post(`/daily-parking/${id}/checkout`, { amount: Number(data.amount) / saveMult, payment_status: data.payment_status, currency: data.currency || 'USD' });
       Modal.close(); Toast.success('Vehicle checked out'); Router.navigate('daily-parking');
     }});
   },
