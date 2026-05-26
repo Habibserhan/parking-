@@ -245,17 +245,66 @@ body {
   font-weight: 500;
 }
 
-/* ---------- RESPONSIVE ---------- */
+/* ---------- RESPONSIVE: LOGIN ---------- */
 @media (max-width: 980px) {
-  #login-page { display: block; min-height: 100vh; background: #07070e; }
-  .lp-hero { min-height: 200px; }
-  .lp-hero-inner { min-height: unset; padding: 28px 24px; flex-direction: row; align-items: center; gap: 16px; flex-wrap: wrap; }
-  .lp-spacer,.lp-feats { display: none; }
-  .lp-headline { margin-bottom: 0; }
+  #login-page {
+    display: block;
+    background: #07070e;
+    min-height: 100vh;
+    overflow-y: auto;
+  }
+
+  /* Hero takes only as much space as content needs */
+  .lp-hero {
+    min-height: unset;
+    height: auto;
+  }
+
+  .lp-hero-inner {
+    min-height: unset;
+    padding: 32px 24px 36px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+
+  /* Show everything */
+  .lp-spacer { display: none; }
+  .lp-feats  { display: flex; margin-bottom: 28px; }
+  .lp-help   { display: inline-flex; }
+
+  .lp-headline {
+    margin-top: 24px;
+    margin-bottom: 28px;
+  }
+  .lp-headline h1 { font-size: 36px; }
+  .lp-headline p  { display: block; }
+
+  /* Login card section */
+  .lp-right {
+    padding: 28px 20px 40px;
+    background: #07070e;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: unset;
+  }
+
+  .lp-card {
+    width: 100%;
+    max-width: 440px;
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .lp-hero-inner { padding: 24px 18px 28px; }
   .lp-headline h1 { font-size: 28px; }
-  .lp-headline p { display: none; }
-  .lp-right { padding: 28px 20px; background: #07070e; min-height: calc(100vh - 200px); display: flex; align-items: center; justify-content: center; }
-  .lp-card { width: 100%; max-width: 440px; margin: 0 auto; }
+  .lp-card { padding: 30px 20px 24px; }
+  .lp-right { padding: 20px 14px 36px; }
+  .lp-feat-ic { width: 38px; height: 38px; font-size: 14px; }
+  .lp-feat strong { font-size: 13px; }
+  .lp-feat span   { font-size: 12px; }
 }
 
 /* ======== APP LAYOUT ======== */
@@ -727,9 +776,6 @@ tbody td.actions { white-space: nowrap; }
 
   /* Smaller page content padding */
   #page-content { padding: 10px; }
-
-  /* Hide help box on very small screens */
-  .lp-help { display: none; }
 
   /* Make badge text smaller */
   .badge { font-size: 10px; padding: 2px 7px; }
