@@ -28,6 +28,7 @@ const UsersPage = {
   async render() {
     [this.data, this.settings] = await Promise.all([API.get('/users'), API.get('/settings')]);
     const currencies = this._loadCurrencies();
+    const tpSettings = this._getThirdPartySettings();
 
     return `
       <div class="page-header">
@@ -64,6 +65,20 @@ const UsersPage = {
           <div id="cur-list">
             ${this._renderCurrencyList(currencies)}
           </div>
+        </div>
+      </div>
+
+      <!-- Third Party -->
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-header"><span class="card-title"><i class="fas fa-building" style="color:var(--primary);margin-right:8px"></i>Third Party Settings</span></div>
+        <div class="card-body">
+          <form id="tp-settings-form"><div class="form-row cols-2">
+            <div class="form-group"><label>Company Name</label><input name="tp_name" value="${escHtml(tpSettings.name || '')}" placeholder="e.g. ABC Company"></div>
+            <div class="form-group"><label>Rate per Vehicle / Month</label><input name="tp_rate" type="number" min="0" step="any" value="${tpSettings.rate || ''}" placeholder="e.g. 150"></div>
+            <div class="form-group"><label>Currency</label>${currencySelect('tp_currency', tpSettings.currency || 'USD')}</div>
+          </div>
+          <div style="margin-top:16px"><button type="button" class="btn btn-primary" onclick="UsersPage.saveThirdPartySettings()"><i class="fas fa-save"></i> Save</button></div>
+          </form>
         </div>
       </div>
 
@@ -173,10 +188,33 @@ const UsersPage = {
     document.getElementById('cur-list').innerHTML = this._renderCurrencyList(currencies);
   },
 
+  _getThirdPartySettings() {
+    try {
+      const parsed = JSON.parse(this.settings.custom_rates || '{}');
+      return parsed.__thirdParty || {};
+    } catch { return {}; }
+  },
+
+  async saveThirdPartySettings() {
+    const form = document.getElementById('tp-settings-form');
+    const fd = {};
+    new FormData(form).forEach((v, k) => { fd[k] = v; });
+    const tp = { name: fd.tp_name || '', rate: parseFloat(fd.tp_rate) || null, currency: fd.tp_currency || 'USD' };
+    const parsed = JSON.parse(window.appSettings?.custom_rates || '{}');
+    parsed.__thirdParty = tp;
+    const settingsForm = document.getElementById('settings-form');
+    const data = {};
+    new FormData(settingsForm).forEach((v, k) => { data[k] = v; });
+    data.custom_rates = JSON.stringify(parsed);
+    await API.put('/settings', data);
+    window.appSettings = { ...window.appSettings, custom_rates: data.custom_rates };
+    Toast.success('Third party settings saved');
+  },
+
   async _saveCurrencyMap(currencies) {
     try {
       const existing = JSON.parse(window.appSettings?.custom_rates || '{}');
-      if (existing.__parkingRates) currencies.__parkingRates = existing.__parkingRates;
+      Object.keys(existing).filter(k => k.startsWith('__')).forEach(k => { currencies[k] = existing[k]; });
     } catch {}
     const form = document.getElementById('settings-form');
     const data = {};
@@ -221,6 +259,10 @@ const UsersPage = {
       rates[type] = { rate: rate > 0 ? rate : null, currency: currSel?.value || 'USD' };
     });
     const currencies = this._loadCurrencies();
+    try {
+      const existing = JSON.parse(window.appSettings?.custom_rates || '{}');
+      Object.keys(existing).filter(k => k.startsWith('__') && k !== '__parkingRates').forEach(k => { currencies[k] = existing[k]; });
+    } catch {}
     const allData = { ...currencies, __parkingRates: rates };
     const form = document.getElementById('settings-form');
     const data = {};
