@@ -113,17 +113,23 @@ const DailyParkingPage = {
   showCheckOut(id) {
     const record = this.data.find(r => r.id === id);
     const mins = Math.round((Date.now() - new Date(record?.entry_time)) / 60000);
+    const calc = calcParkingAmount(record?.vehicle_type, mins);
+    const autoAmount = calc ? calc.amount : 0;
+    const autoCurrency = calc ? calc.currency : 'USD';
+    const calcNote = calc
+      ? `<div style="margin-top:6px;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--text-muted)"><i class="fas fa-calculator" style="margin-right:4px"></i>Auto: ${fmtDuration(mins)} → ${calc.units} × ${calc.unitLabel} = ${fmtAmt(calc.amount, calc.currency)}</div>`
+      : `<div style="margin-top:6px;font-size:12px;color:var(--text-muted)">No rate set — enter manually</div>`;
     Modal.show({ title: `Check Out — ${record?.plate_number}`, body: `
       <div style="background:var(--bg);border-radius:8px;padding:14px;margin-bottom:16px">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div><small class="text-muted">Entry</small><div>${fmtDateTime(record?.entry_time)}</div></div>
-          <div><small class="text-muted">Duration so far</small><div>${fmtDuration(mins)}</div></div>
+          <div><small class="text-muted">Duration</small><div>${fmtDuration(mins)}</div></div>
         </div>
       </div>
       <form id="modal-form">
         <div class="form-row cols-2">
-          <div class="form-group"><label>Amount *</label><input name="amount" type="number" step="0.01" min="0" required placeholder="0.00" value="0"></div>
-          <div class="form-group"><label>Currency</label>${currencySelect('currency', 'USD')}</div>
+          <div class="form-group"><label>Amount *</label><input name="amount" type="number" step="0.01" min="0" required placeholder="0.00" value="${autoAmount}">${calcNote}</div>
+          <div class="form-group"><label>Currency</label>${currencySelect('currency', autoCurrency)}</div>
           <div class="form-group"><label>Payment Status</label>
             <select name="payment_status">
               <option value="paid">Paid</option>

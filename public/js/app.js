@@ -226,7 +226,7 @@ function _getCurrencyMap() {
   try {
     const parsed = JSON.parse(window.appSettings?.custom_rates || '{}');
     const result = {};
-    Object.entries(parsed).forEach(([k, v]) => { if (typeof v === 'object' && v !== null) result[k] = v; });
+    Object.entries(parsed).forEach(([k, v]) => { if (!k.startsWith('__') && typeof v === 'object' && v !== null) result[k] = v; });
     if (Object.keys(result).length) return result;
   } catch {}
   return {
@@ -256,6 +256,26 @@ function currencySelect(name, selected) {
     `<option value="${c}" ${c === sel ? 'selected' : ''}>${cfg.symbol} — ${cfg.name || c}</option>`
   ).join('');
   return `<select name="${name}">${opts}</select>`;
+}
+
+// Get parking rates configured by admin
+function getParkingRates() {
+  try {
+    const parsed = JSON.parse(window.appSettings?.custom_rates || '{}');
+    return parsed.__parkingRates || {};
+  } catch { return {}; }
+}
+
+// Returns null if no rate configured, otherwise { amount, currency, units, unitLabel, breakdown }
+function calcParkingAmount(vehicle_type, duration_minutes) {
+  const rates = getParkingRates();
+  const r = rates[vehicle_type];
+  if (!r || !r.rate) return null;
+  const unit = Number(r.unit_minutes) || 60;
+  const units = Math.ceil(Math.max(duration_minutes, 1) / unit);
+  const amount = units * Number(r.rate);
+  const unitLabel = unit === 60 ? 'hr' : unit === 30 ? '30 min' : `${unit} min`;
+  return { amount, currency: r.currency || 'USD', units, unitLabel };
 }
 
 function fmtDate(d) {

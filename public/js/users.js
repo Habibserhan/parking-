@@ -18,7 +18,7 @@ const UsersPage = {
       const parsed = JSON.parse(this.settings.custom_rates || '{}');
       // Only keep object entries (currency definitions, not old number-based rates)
       const result = {};
-      Object.entries(parsed).forEach(([k, v]) => { if (typeof v === 'object' && v !== null) result[k] = v; });
+      Object.entries(parsed).forEach(([k, v]) => { if (!k.startsWith('__') && typeof v === 'object' && v !== null) result[k] = v; });
       // If nothing saved yet, return defaults
       if (!Object.keys(result).length) return { ...this.DEFAULTS };
       return result;
@@ -64,6 +64,16 @@ const UsersPage = {
           <div id="cur-list">
             ${this._renderCurrencyList(currencies)}
           </div>
+        </div>
+      </div>
+
+      <!-- Parking Rates -->
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-header">
+          <span class="card-title"><i class="fas fa-parking" style="color:var(--primary);margin-right:8px"></i>Daily Parking Rates</span>
+        </div>
+        <div class="card-body" style="padding:0">
+          ${this._renderParkingRates(this._getParkingRates())}
         </div>
       </div>
 
@@ -164,12 +174,68 @@ const UsersPage = {
   },
 
   async _saveCurrencyMap(currencies) {
+    try {
+      const existing = JSON.parse(window.appSettings?.custom_rates || '{}');
+      if (existing.__parkingRates) currencies.__parkingRates = existing.__parkingRates;
+    } catch {}
     const form = document.getElementById('settings-form');
     const data = {};
     new FormData(form).forEach((v, k) => { data[k] = v; });
     data.custom_rates = JSON.stringify(currencies);
     await API.put('/settings', data);
     window.appSettings = { ...window.appSettings, custom_rates: data.custom_rates };
+  },
+
+  _getParkingRates() {
+    try {
+      const parsed = JSON.parse(this.settings.custom_rates || '{}');
+      return parsed.__parkingRates || {};
+    } catch { return {}; }
+  },
+
+  _renderParkingRates(rates) {
+    return `<table>
+      <thead><tr><th>Vehicle Type</th><th>Rate per unit <small style="font-weight:400;color:var(--text-muted)">(LBP: enter thousands — 200 = LL 200,000)</small></th><th>Currency</th><th>Billing unit</th></tr></thead>
+      <tbody>${VEHICLE_TYPES.map(vt => {
+        const r = rates[vt.value] || {};
+        return `<tr>
+          <td><i class="fas ${vt.icon}" style="margin-right:6px;color:var(--primary)"></i>${vt.label}</td>
+          <td><input type="number" class="pr-rate-input" data-type="${escHtml(vt.value)}" value="${r.rate || ''}" min="0" step="any" placeholder="e.g. 200" style="width:130px;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:600"></td>
+          <td>${currencySelect('pr_currency_' + vt.value, r.currency || 'USD')}</td>
+          <td><select class="pr-unit-sel" data-type="${escHtml(vt.value)}" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            <option value="60" ${(r.unit_minutes||60)==60?'selected':''}>Per hour</option>
+            <option value="30" ${r.unit_minutes==30?'selected':''}>Per 30 min</option>
+            <option value="10" ${r.unit_minutes==10?'selected':''}>Per 10 min</option>
+          </select></td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>
+    <div style="padding:16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:12px">
+      <button class="btn btn-primary" onclick="UsersPage.saveParkingRates()"><i class="fas fa-save"></i> Save Rates</button>
+      <span id="pr-saved-msg" style="display:none;color:#16a34a;font-size:13px;font-weight:600"><i class="fas fa-check-circle"></i> Saved!</span>
+    </div>`;
+  },
+
+  async saveParkingRates() {
+    const rates = {};
+    document.querySelectorAll('.pr-rate-input').forEach(input => {
+      const type = input.dataset.type;
+      const rate = parseFloat(input.value);
+      const currSel = document.querySelector(`select[name="pr_currency_${type}"]`);
+      const unitSel = document.querySelector(`.pr-unit-sel[data-type="${type}"]`);
+      rates[type] = { rate: rate > 0 ? rate : null, currency: currSel?.value || 'USD', unit_minutes: Number(unitSel?.value) || 60 };
+    });
+    const currencies = this._loadCurrencies();
+    const allData = { ...currencies, __parkingRates: rates };
+    const form = document.getElementById('settings-form');
+    const data = {};
+    new FormData(form).forEach((v, k) => { data[k] = v; });
+    data.custom_rates = JSON.stringify(allData);
+    await API.put('/settings', data);
+    window.appSettings = { ...window.appSettings, custom_rates: data.custom_rates };
+    const msg = document.getElementById('pr-saved-msg');
+    if (msg) { msg.style.display = 'inline'; setTimeout(() => msg.style.display = 'none', 3000); }
+    Toast.success('Parking rates saved');
   },
 
   renderTable(rows) {
