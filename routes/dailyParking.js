@@ -51,14 +51,15 @@ router.post('/:id/checkout', authenticate, async (req, res) => {
 
 router.put('/:id', authenticate, async (req, res) => {
   try {
-    const { plate_number, vehicle_type, entry_time, exit_time, amount, payment_status, parking_status, notes } = req.body;
+    const { plate_number, vehicle_type, entry_time, exit_time, amount, payment_status, parking_status, notes, currency } = req.body;
     await sb.from('daily_parking').update({
       plate_number, vehicle_type, entry_time,
       exit_time: exit_time || null,
       amount: amount || 0,
       payment_status: payment_status || 'unpaid',
       parking_status: parking_status || 'parked',
-      notes: notes || ''
+      notes: notes || '',
+      currency: currency || 'USD'
     }).eq('id', req.params.id);
     res.json({ message: 'Updated' });
   } catch (e) { res.status(500).json({ error: e.message }); }
