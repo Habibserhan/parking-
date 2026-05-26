@@ -195,19 +195,17 @@ const UsersPage = {
 
   _renderParkingRates(rates) {
     return `<table>
-      <thead><tr><th>Vehicle Type</th><th>Rate per Hour</th><th>Currency</th></tr></thead>
+      <thead><tr><th>Vehicle Type</th><th>Rate</th><th>Currency</th><th>Unit</th></tr></thead>
       <tbody>${VEHICLE_TYPES.map(vt => {
         const r = rates[vt.value] || {};
         return `<tr>
           <td><i class="fas ${vt.icon}" style="margin-right:6px;color:var(--primary)"></i>${vt.label}</td>
           <td><input type="number" class="pr-rate-input" data-type="${escHtml(vt.value)}" value="${r.rate || ''}" min="0" step="any" placeholder="e.g. 200" style="width:130px;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:600"></td>
           <td>${currencySelect('pr_currency_' + vt.value, r.currency || 'USD')}</td>
+          <td><span class="badge badge-info">Per Hour</span></td>
         </tr>`;
       }).join('')}</tbody>
     </table>
-    <div style="padding:12px 16px;background:var(--bg);font-size:12px;color:var(--text-muted);border-top:1px solid var(--border)">
-      <i class="fas fa-info-circle"></i> LBP: enter in thousands — 200 = LL 200,000. Calculation: full hours only (6h 15m = 6 hrs).
-    </div>
     <div style="padding:16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:12px">
       <button class="btn btn-primary" onclick="UsersPage.saveParkingRates()"><i class="fas fa-save"></i> Save Rates</button>
       <span id="pr-saved-msg" style="display:none;color:#16a34a;font-size:13px;font-weight:600"><i class="fas fa-check-circle"></i> Saved!</span>
