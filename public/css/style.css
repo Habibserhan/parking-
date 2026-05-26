@@ -247,15 +247,15 @@ body {
 
 /* ---------- RESPONSIVE ---------- */
 @media (max-width: 980px) {
-  #login-page { display: block; }
-  .lp-hero { min-height: 220px; }
+  #login-page { display: block; min-height: 100vh; background: #07070e; }
+  .lp-hero { min-height: 200px; }
   .lp-hero-inner { min-height: unset; padding: 28px 24px; flex-direction: row; align-items: center; gap: 16px; flex-wrap: wrap; }
   .lp-spacer,.lp-feats { display: none; }
   .lp-headline { margin-bottom: 0; }
   .lp-headline h1 { font-size: 28px; }
   .lp-headline p { display: none; }
-  .lp-right { padding: 28px 20px; background: #07070e; }
-  .lp-card { width: 100%; max-width: 420px; margin: 0 auto; }
+  .lp-right { padding: 28px 20px; background: #07070e; min-height: calc(100vh - 200px); display: flex; align-items: center; justify-content: center; }
+  .lp-card { width: 100%; max-width: 440px; margin: 0 auto; }
 }
 
 /* ======== APP LAYOUT ======== */
@@ -657,12 +657,92 @@ tbody td.actions { white-space: nowrap; }
   .charts-grid { grid-template-columns: 1fr; }
   .form-row.cols-2, .form-row.cols-3 { grid-template-columns: 1fr; }
   .detail-grid { grid-template-columns: 1fr; }
-  #page-content { padding: 16px; }
+  #page-content { padding: 12px; }
   .modal-box { max-height: 95vh; }
+
+  /* Topbar */
+  .topbar { padding: 0 14px; gap: 8px; }
+  .topbar-title { font-size: 15px; }
+  #topbar-date { display: none; }
+
+  /* Page header */
+  .page-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .page-actions { width: 100%; }
+  .page-actions .btn { flex: 1; justify-content: center; }
+  .page-title h2 { font-size: 18px; }
+
+  /* Filters bar — stack vertically */
+  .filters-bar { flex-direction: column; align-items: stretch; }
+  .filters-bar input,
+  .filters-bar select { width: 100%; min-width: unset; }
+  .filters-bar .btn { width: 100%; justify-content: center; }
+
+  /* Tables — horizontal scroll with fade hint */
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { min-width: 520px; }
+
+  /* Stat cards */
+  .stat-card { padding: 14px; }
+  .stat-value { font-size: 20px; }
+  .stat-icon { width: 40px; height: 40px; font-size: 17px; }
+
+  /* Card header */
+  .card-header { flex-direction: column; align-items: flex-start; }
+
+  /* Modals — full screen on mobile */
+  .modal-overlay { padding: 0; align-items: flex-end; }
+  .modal-box {
+    border-radius: 20px 20px 0 0;
+    max-width: 100%;
+    max-height: 92vh;
+  }
+  .modal-box.modal-lg { max-width: 100%; }
+
+  /* Action buttons in tables */
+  td.actions { display: flex; gap: 4px; flex-wrap: wrap; }
+
+  /* Toast — full width bottom */
+  #toast-container { bottom: 12px; right: 12px; left: 12px; }
+  .toast { min-width: unset; max-width: 100%; }
+
+  /* Charts */
+  .charts-grid { grid-template-columns: 1fr; }
+  .chart-wrap { height: 180px; }
+
+  /* Sub section table */
+  .sub-section .table-wrap table { min-width: 400px; }
 }
 
 @media (max-width: 480px) {
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+  .stat-card { padding: 12px; gap: 10px; }
+  .stat-value { font-size: 18px; }
+  .stat-label { font-size: 11px; }
+
+  /* Login page on small phones */
+  .lp-hero-inner { padding: 20px 16px; }
+  .lp-headline h1 { font-size: 24px; }
+  .lp-card { padding: 28px 20px 24px; }
+  .lp-right { padding: 20px 14px; }
+
+  /* Smaller page content padding */
+  #page-content { padding: 10px; }
+
+  /* Hide help box on very small screens */
+  .lp-help { display: none; }
+
+  /* Make badge text smaller */
+  .badge { font-size: 10px; padding: 2px 7px; }
+
+  /* Buttons in page actions */
+  .page-actions { flex-direction: column; }
+  .page-actions .btn { width: 100%; }
+}
+
+@media (max-width: 360px) {
   .stats-grid { grid-template-columns: 1fr; }
+  .topbar-title { font-size: 13px; }
+  .btn { padding: 7px 12px; font-size: 12px; }
 }
 
 /* ======== PRINT INVOICE ======== */
