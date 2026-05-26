@@ -116,15 +116,37 @@ const DailyParkingPage = {
   showCheckOut(id) {
     const record = this.data.find(r => r.id === id);
     const mins = Math.round((Date.now() - new Date(record?.entry_time)) / 60000);
-    const calc = calcParkingAmount(record?.vehicle_type, mins);
-    const autoCurrency = calc ? calc.currency : 'USD';
-    const curCfg = _getCurrencyMap()[autoCurrency] || {};
-    const multiplier = curCfg.multiplier || 1;
-    const inputAmount = calc ? Math.round(calc.amount * multiplier) : 0;
-    const ratePerHour = getParkingRates()[record?.vehicle_type]?.rate;
-    const calcNote = calc
-      ? `<div style="margin-top:6px;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--text-muted)"><i class="fas fa-calculator" style="margin-right:4px"></i>${fmtDuration(mins)} × ${fmtAmt(ratePerHour, calc.currency)}/hr = ${fmtAmt(calc.amount, calc.currency)}</div>`
-      : `<div style="margin-top:6px;font-size:12px;color:var(--text-muted)">No rate set — enter manually</div>`;
+
+    // Third party: use flat monthly company rate
+    let autoCurrency, multiplier, inputAmount, calcNote;
+    if (record?.third_party_company) {
+      try {
+        const parsed = JSON.parse(window.appSettings?.custom_rates || '{}');
+        const company = (parsed.__thirdParties || []).find(c => c.name === record.third_party_company);
+        if (company) {
+          autoCurrency = company.currency || 'USD';
+          multiplier = (_getCurrencyMap()[autoCurrency] || {}).multiplier || 1;
+          inputAmount = Math.round(Number(company.rate) * multiplier);
+          calcNote = `<div style="margin-top:6px;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--text-muted)"><i class="fas fa-building" style="margin-right:4px"></i>${escHtml(company.name)} — ${fmtAmt(company.rate, autoCurrency)} / month (flat rate)</div>`;
+        } else {
+          autoCurrency = 'USD'; multiplier = 1; inputAmount = 0;
+          calcNote = `<div style="margin-top:6px;font-size:12px;color:var(--text-muted)">Third party company not found — enter manually</div>`;
+        }
+      } catch {
+        autoCurrency = 'USD'; multiplier = 1; inputAmount = 0;
+        calcNote = `<div style="margin-top:6px;font-size:12px;color:var(--text-muted)">Enter amount manually</div>`;
+      }
+    } else {
+      // Hourly rate calculation
+      const calc = calcParkingAmount(record?.vehicle_type, mins);
+      autoCurrency = calc ? calc.currency : 'USD';
+      multiplier = (_getCurrencyMap()[autoCurrency] || {}).multiplier || 1;
+      inputAmount = calc ? Math.round(calc.amount * multiplier) : 0;
+      const ratePerHour = getParkingRates()[record?.vehicle_type]?.rate;
+      calcNote = calc
+        ? `<div style="margin-top:6px;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--text-muted)"><i class="fas fa-calculator" style="margin-right:4px"></i>${fmtDuration(mins)} × ${fmtAmt(ratePerHour, calc.currency)}/hr = ${fmtAmt(calc.amount, calc.currency)}</div>`
+        : `<div style="margin-top:6px;font-size:12px;color:var(--text-muted)">No rate set — enter manually</div>`;
+    }
     Modal.show({ title: `Check Out — ${record?.plate_number}`, body: `
       <div style="background:var(--bg);border-radius:8px;padding:14px;margin-bottom:16px">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
