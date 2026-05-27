@@ -282,11 +282,13 @@ function getParkingRates() {
 // Returns null if no rate configured, otherwise { amount, currency, hours }
 function calcParkingAmount(vehicle_type, duration_minutes) {
   const rates = getParkingRates();
-  const r = rates[vehicle_type];
-  if (!r || !r.rate) return null;
-  const hours = Math.max(duration_minutes / 60, 1/60);
-  const amount = Math.round(hours * Number(r.rate) * 100) / 100;
-  return { amount, currency: r.currency || 'USD', hours };
+  const tiers = rates[vehicle_type];
+  if (!Array.isArray(tiers) || !tiers.length) return null;
+  const hours = duration_minutes / 60;
+  // Find matching tier: from <= hours < to (null to = and above)
+  const tier = tiers.slice().sort((a, b) => b.from - a.from).find(t => hours >= t.from);
+  if (!tier) return null;
+  return { amount: Number(tier.price), currency: tier.currency || 'USD', hours, tier };
 }
 
 function fmtDate(d) {

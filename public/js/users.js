@@ -288,33 +288,7 @@ const UsersPage = {
     } catch { return {}; }
   },
 
-  _renderParkingRates(rates) {
-    return `<table>
-      <thead><tr><th>Vehicle Type</th><th>Rate</th><th>Currency</th><th>Unit</th></tr></thead>
-      <tbody>${VEHICLE_TYPES.map(vt => {
-        const r = rates[vt.value] || {};
-        return `<tr>
-          <td><i class="fas ${vt.icon}" style="margin-right:6px;color:var(--primary)"></i>${vt.label}</td>
-          <td><input type="number" class="pr-rate-input" data-type="${escHtml(vt.value)}" value="${r.rate || ''}" min="0" step="any" placeholder="e.g. 200" style="width:130px;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:600"></td>
-          <td>${currencySelect('pr_currency_' + vt.value, r.currency || 'USD')}</td>
-          <td><span class="badge badge-info">Per Hour</span></td>
-        </tr>`;
-      }).join('')}</tbody>
-    </table>
-    <div style="padding:16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:12px">
-      <button class="btn btn-primary" onclick="UsersPage.saveParkingRates()"><i class="fas fa-save"></i> Save Rates</button>
-      <span id="pr-saved-msg" style="display:none;color:#16a34a;font-size:13px;font-weight:600"><i class="fas fa-check-circle"></i> Saved!</span>
-    </div>`;
-  },
-
-  async saveParkingRates() {
-    const rates = {};
-    document.querySelectorAll('.pr-rate-input').forEach(input => {
-      const type = input.dataset.type;
-      const rate = parseFloat(input.value);
-      const currSel = document.querySelector(`select[name="pr_currency_${type}"]`);
-      rates[type] = { rate: rate > 0 ? rate : null, currency: currSel?.value || 'USD' };
-    });
+  async _saveParkingRatesFull(rates) {
     const currencies = this._loadCurrencies();
     try {
       const existing = JSON.parse(window.appSettings?.custom_rates || '{}');
@@ -327,9 +301,86 @@ const UsersPage = {
     data.custom_rates = JSON.stringify(allData);
     await API.put('/settings', data);
     window.appSettings = { ...window.appSettings, custom_rates: data.custom_rates };
-    const msg = document.getElementById('pr-saved-msg');
-    if (msg) { msg.style.display = 'inline'; setTimeout(() => msg.style.display = 'none', 3000); }
-    Toast.success('Parking rates saved');
+    this.settings = { ...this.settings, custom_rates: data.custom_rates };
+  },
+
+  _renderParkingRates(rates) {
+    return VEHICLE_TYPES.map(vt => {
+      const tiers = Array.isArray(rates[vt.value]) ? rates[vt.value] : [];
+      return `<div style="padding:16px;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <span style="font-weight:600;font-size:14px"><i class="fas ${vt.icon}" style="margin-right:6px;color:var(--primary)"></i>${vt.label}</span>
+          <button class="btn btn-sm btn-primary" onclick="UsersPage.showAddTierModal('${vt.value}')"><i class="fas fa-plus"></i> Add Tier</button>
+        </div>
+        <div id="pr-tiers-${vt.value}">
+          ${this._renderTierTable(vt.value, tiers)}
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  _renderTierTable(vehicleType, tiers) {
+    if (!tiers.length) return `<div class="empty-state" style="padding:16px 0"><i class="fas fa-clock"></i><h4 style="font-size:13px">No tiers yet</h4><p style="font-size:12px">Add a price tier to get started.</p></div>`;
+    return `<table style="font-size:13px">
+      <thead><tr><th>From (hours)</th><th>To (hours)</th><th>Price</th><th>Currency</th><th>Actions</th></tr></thead>
+      <tbody>${tiers.map((t, i) => `<tr>
+        <td>${t.from}h</td>
+        <td>${t.to != null ? t.to + 'h' : '<span class="badge badge-info">and above</span>'}</td>
+        <td class="fw-bold">${fmtRaw(t.price, t.currency)}</td>
+        <td><span class="badge badge-gray">${escHtml(t.currency)}</span></td>
+        <td class="actions">
+          <button class="btn btn-sm btn-outline btn-icon" onclick="UsersPage.showEditTierModal('${vehicleType}', ${i})" title="Edit"><i class="fas fa-edit"></i></button>
+          <button class="btn btn-sm btn-outline btn-icon" onclick="UsersPage.deleteTier('${vehicleType}', ${i})" title="Delete"><i class="fas fa-trash"></i></button>
+        </td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+  },
+
+  _tierFormHtml(t = {}) {
+    return `<form id="modal-form"><div class="form-row cols-2">
+      <div class="form-group"><label>From (hours) *</label><input name="from" type="number" min="0" step="0.5" required value="${t.from ?? ''}" placeholder="e.g. 0"></div>
+      <div class="form-group"><label>To (hours)</label><input name="to" type="number" min="0" step="0.5" value="${t.to ?? ''}" placeholder="Leave blank = and above"></div>
+      <div class="form-group"><label>Price *</label><input name="price" type="number" min="0" step="any" required value="${t.price ?? ''}" placeholder="e.g. 10"></div>
+      <div class="form-group"><label>Currency</label>${currencySelect('currency', t.currency || 'USD')}</div>
+    </div></form>`;
+  },
+
+  showAddTierModal(vehicleType) {
+    Modal.show({ title: `Add Tier — ${VEHICLE_TYPES.find(v => v.value === vehicleType)?.label || vehicleType}`, body: this._tierFormHtml(), saveLabel: 'Add Tier', onSave: async () => {
+      if (!Modal.validate()) throw new Error('From and Price are required');
+      const data = Modal.getFormData();
+      const rates = this._getParkingRates();
+      if (!Array.isArray(rates[vehicleType])) rates[vehicleType] = [];
+      rates[vehicleType].push({ from: Number(data.from), to: data.to !== '' ? Number(data.to) : null, price: Number(data.price), currency: data.currency || 'USD' });
+      rates[vehicleType].sort((a, b) => a.from - b.from);
+      await this._saveParkingRatesFull(rates);
+      Modal.close(); Toast.success('Tier added');
+      document.getElementById(`pr-tiers-${vehicleType}`).innerHTML = this._renderTierTable(vehicleType, rates[vehicleType]);
+    }});
+  },
+
+  showEditTierModal(vehicleType, index) {
+    const rates = this._getParkingRates();
+    const tier = (rates[vehicleType] || [])[index];
+    if (!tier) return;
+    Modal.show({ title: `Edit Tier — ${VEHICLE_TYPES.find(v => v.value === vehicleType)?.label || vehicleType}`, body: this._tierFormHtml(tier), saveLabel: 'Save', onSave: async () => {
+      if (!Modal.validate()) throw new Error('From and Price are required');
+      const data = Modal.getFormData();
+      rates[vehicleType][index] = { from: Number(data.from), to: data.to !== '' ? Number(data.to) : null, price: Number(data.price), currency: data.currency || 'USD' };
+      rates[vehicleType].sort((a, b) => a.from - b.from);
+      await this._saveParkingRatesFull(rates);
+      Modal.close(); Toast.success('Tier updated');
+      document.getElementById(`pr-tiers-${vehicleType}`).innerHTML = this._renderTierTable(vehicleType, rates[vehicleType]);
+    }});
+  },
+
+  async deleteTier(vehicleType, index) {
+    if (!confirmDelete('Delete this pricing tier?')) return;
+    const rates = this._getParkingRates();
+    rates[vehicleType].splice(index, 1);
+    await this._saveParkingRatesFull(rates);
+    Toast.success('Tier deleted');
+    document.getElementById(`pr-tiers-${vehicleType}`).innerHTML = this._renderTierTable(vehicleType, rates[vehicleType]);
   },
 
   renderTable(rows) {

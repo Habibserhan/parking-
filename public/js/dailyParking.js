@@ -196,10 +196,9 @@ const DailyParkingPage = {
       autoCurrency = calc ? calc.currency : 'USD';
       multiplier = (_getCurrencyMap()[autoCurrency] || {}).multiplier || 1;
       inputAmount = calc ? Math.round(calc.amount * multiplier) : 0;
-      const ratePerHour = getParkingRates()[record?.vehicle_type]?.rate;
       calcNote = calc
-        ? `<div style="margin-top:6px;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--text-muted)"><i class="fas fa-calculator" style="margin-right:4px"></i>${fmtDuration(mins)} × ${fmtAmt(ratePerHour, calc.currency)}/hr = ${fmtAmt(calc.amount, calc.currency)}</div>`
-        : `<div style="margin-top:6px;font-size:12px;color:var(--text-muted)">No rate set — enter manually</div>`;
+        ? `<div style="margin-top:6px;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--text-muted)"><i class="fas fa-calculator" style="margin-right:4px"></i>${fmtDuration(mins)} → tier ${calc.tier.from}h–${calc.tier.to != null ? calc.tier.to + 'h' : '∞'} = ${fmtAmt(calc.amount, calc.currency)}</div>`
+        : `<div style="margin-top:6px;font-size:12px;color:var(--text-muted)">No rate tier set — enter manually</div>`;
     }
     Modal.show({ title: `Check Out — ${record?.plate_number}`, body: `
       <div style="background:var(--bg);border-radius:8px;padding:14px;margin-bottom:16px">
