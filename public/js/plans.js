@@ -43,7 +43,7 @@ const PlansPage = {
         <td><strong>${escHtml(p.name)}</strong></td>
         <td>${vehicleBadge(p.vehicle_type)}</td>
         <td><span class="badge badge-info">${escHtml(p.duration)}</span></td>
-        <td class="fw-bold">${fmtAmt(p.price, p.currency)}</td>
+        <td class="fw-bold">${fmtRaw(p.price, p.currency)}</td>
         <td class="text-muted">${escHtml(p.description || '—')}</td>
         <td>${statusBadge(p.is_active ? 'active' : 'expired')}</td>
         ${Auth.isAdmin() ? `<td class="actions">

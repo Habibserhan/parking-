@@ -49,7 +49,7 @@ const UnpaidPage = {
         <td><strong>${escHtml(r.plate_number)}</strong></td>
         <td>${vehicleBadge(r.vehicle_type)}</td>
         <td class="text-muted">${escHtml(r.plan_name || '—')}</td>
-        <td class="fw-bold text-danger">${fmtCurrency(r.final_amount || r.amount)}</td>
+        <td class="fw-bold text-danger">${fmtRaw(r.final_amount || r.amount, r.currency)}</td>
         <td>${r.due_date ? `<span class="${r.due_date < today() ? 'text-danger' : ''}">${fmtDate(r.due_date)}</span>` : '—'}</td>
         <td>${r.invoice_number ? `<span class="badge badge-warning">${escHtml(r.invoice_number)}</span>` : '<span class="badge badge-gray">No Invoice</span>'}</td>
         <td class="actions">

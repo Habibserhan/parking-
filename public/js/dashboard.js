@@ -6,16 +6,21 @@ const DashboardPage = {
   _stats: null,
   _currency: 'USD',
   _activeType: null,
+  _mode: 'date', // 'date' | 'all'
 
   async render() {
     return `
       <div class="page-header">
         <div class="page-title"><h2>Dashboard</h2><p>Parking business overview</p></div>
-        <div class="page-actions">
-          <div class="month-selector">
-            <label>Date:</label>
-            <input type="date" id="dash-month" value="${today()}">
-          </div>
+        <div class="page-actions" style="flex-wrap:wrap;gap:8px">
+          <!-- Date picker (always visible) -->
+          <input type="date" id="dash-month" value="${today()}" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;height:38px">
+          <!-- All Data toggle -->
+          <button id="dash-btn-all" onclick="DashboardPage.setMode(DashboardPage._mode==='all'?'date':'all')"
+            style="padding:0 16px;border:1.5px solid var(--border);border-radius:8px;background:transparent;color:var(--text-muted);font-weight:600;cursor:pointer;font-size:13px;height:38px;transition:.15s">
+            <i class="fas fa-database" style="margin-right:5px"></i>All Data
+          </button>
+          <!-- Currency toggle -->
           <div style="display:flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;height:38px">
             <button id="btn-usd" onclick="DashboardPage.setCurrency('USD')"
               style="padding:0 16px;border:none;background:var(--primary);color:#fff;font-weight:700;cursor:pointer;font-size:13px;transition:.15s">
@@ -32,14 +37,42 @@ const DashboardPage = {
   },
 
   async init() {
-    document.getElementById('dash-month').addEventListener('change', () => { this._activeType = null; this.loadData(); });
+    document.getElementById('dash-month').addEventListener('change', () => {
+      this._mode = 'date';
+      this._updateAllBtn();
+      this._activeType = null;
+      this.loadData();
+    });
     this.loadData();
   },
 
+  setMode(mode) {
+    this._mode = mode;
+    this._activeType = null;
+    this._updateAllBtn();
+    this.loadData();
+  },
+
+  _updateAllBtn() {
+    const btn = document.getElementById('dash-btn-all');
+    if (!btn) return;
+    const active = this._mode === 'all';
+    btn.style.background = active ? 'var(--primary)' : 'transparent';
+    btn.style.color      = active ? '#fff' : 'var(--text-muted)';
+    btn.style.border     = active ? '1.5px solid var(--primary)' : '1.5px solid var(--border)';
+  },
+
   async loadData() {
-    const date = document.getElementById('dash-month').value || today();
+    const mode = this._mode;
+    let query = '';
+    if (mode === 'all') {
+      query = '/dashboard?mode=all';
+    } else {
+      const date = document.getElementById('dash-month')?.value || today();
+      query = `/dashboard?date=${date}&mode=date`;
+    }
     try {
-      const d = await API.get(`/dashboard?date=${date}`);
+      const d = await API.get(query);
       this._stats = d.stats;
       document.getElementById('dash-content').innerHTML = `
         <div class="stats-grid" id="stats-grid">${this._statCards(d.stats)}</div>
@@ -77,16 +110,18 @@ const DashboardPage = {
   },
 
   _statCards(s) {
+    const period = this._mode === 'all' ? 'All time' : (document.getElementById('dash-month')?.value || today());
     return `
-      ${this._card('fa-dollar-sign',        'blue',   'Total Revenue',        this._fmtMoney(s.totalRevenue),    'Paid invoices + parking + services', 'total-revenue')}
-      ${this._card('fa-file-invoice',       'purple', 'Subscription Revenue', this._fmtMoney(s.subRevenue),      'Paid invoices this month',            'sub-revenue')}
-      ${this._card('fa-car',                'cyan',   'Parking Revenue',      this._fmtMoney(s.parkingRevenue),  'Daily parking income',                'parking-revenue')}
-      ${this._card('fa-shower',             'info',   'Services Revenue',     this._fmtMoney(s.servicesRevenue), 'Wash & cleaning income',              'services-revenue')}
-      ${this._card('fa-receipt',            'amber',  'Total Expenses',       this._fmtMoney(s.totalExpenses),   'All expenses this month',             'expenses')}
-      ${this._card('fa-chart-line', s.netProfit >= 0 ? 'green' : 'red', 'Net Profit', this._fmtMoney(s.netProfit), 'Revenue minus expenses', 'net-profit')}
-      ${this._card('fa-users',              'blue',   'Active Subscribers',   s.activeClients,   'Active subscription clients',  'active-subscribers')}
-      ${this._card('fa-exclamation-circle', 'amber',  'Unpaid Subscribers',   s.unpaidClients,   'Not paid this month',          'unpaid-subscribers')}
-      ${this._card('fa-parking',            'cyan',   'Currently Parked',     s.currentlyParked, 'Vehicles in lot now',          'currently-parked')}`;
+      ${this._card('fa-dollar-sign',        'blue',   'Total Revenue',        this._fmtMoney(s.totalRevenue),    period, 'total-revenue')}
+      ${this._card('fa-file-invoice',       'purple', 'Subscription Revenue', this._fmtMoney(s.subRevenue),      period, 'sub-revenue')}
+      ${this._card('fa-car',                'cyan',   'Parking Revenue',      this._fmtMoney(s.parkingRevenue),  period, 'parking-revenue')}
+      ${this._card('fa-shower',             'info',   'Services Revenue',     this._fmtMoney(s.servicesRevenue), period, 'services-revenue')}
+      ${this._card('fa-receipt',            'amber',  'Total Expenses',       this._fmtMoney(s.totalExpenses),   period, 'expenses')}
+      ${this._card('fa-chart-line', s.netProfit >= 0 ? 'green' : 'red', 'Net Profit', this._fmtMoney(s.netProfit), period, 'net-profit')}
+      ${this._card('fa-users',              'blue',   'Active Subscribers',   s.activeClients,    this._mode === 'all' ? 'All active clients'   : `Active on ${period}`,       'active-subscribers')}
+      ${this._card('fa-exclamation-circle', 'amber',  'Unpaid Subscribers',   s.unpaidClients,    this._mode === 'all' ? 'All unpaid invoices'  : `Unpaid — ${period.slice(0,7)}`, 'unpaid-subscribers')}
+      ${this._card('fa-parking',            'cyan',   this._mode === 'all' ? 'Currently Parked' : 'Vehicles Parked', s.currentlyParked, this._mode === 'all' ? 'Live — in lot now' : `Entered on ${period}`, 'currently-parked')}
+      ${this._card('fa-building',           'purple', this._mode === 'all' ? 'Third Party Parked' : 'Third Party — This Day', s.thirdPartyParked, this._mode === 'all' ? 'Company vehicles in lot' : `Company vehicles on ${period}`, 'third-party-parked')}`;
   },
 
   _card(icon, color, label, value, sub, type) {
@@ -141,7 +176,9 @@ const DashboardPage = {
 
     // API-based types
     try {
-      const data = await API.get(`/dashboard/details?type=${type}&date=${month}`);
+      const date = document.getElementById('dash-month')?.value || today();
+      const modeParam = this._mode === 'all' ? 'all' : 'date';
+      const data = await API.get(`/dashboard/details?type=${type}&date=${date}&mode=${modeParam}`);
       const html = this._buildTable(type, data);
       panel.innerHTML = this._panelWrap(this._typeLabel(type), html, data.length);
     } catch (e) {
@@ -229,37 +266,61 @@ const DashboardPage = {
       </tr>`).join('')}</tbody></table>`;
 
     if (type === 'active-subscribers') return `<table>
-      <thead><tr><th>Client</th><th>Mobile</th><th>Plate</th><th>Vehicle</th><th>Plan</th><th>Rate</th></tr></thead>
+      <thead><tr><th>Client</th><th>Mobile</th><th>Plate</th><th>Vehicle</th><th>Plan</th><th>Start</th><th>End</th><th>Rate</th></tr></thead>
       <tbody>${data.map(r => `<tr>
         <td><strong>${escHtml(r.clients?.full_name || '—')}</strong></td>
         <td>${escHtml(r.clients?.mobile || '—')}</td>
         <td>${escHtml(r.plate_number)}</td>
         <td>${vehicleBadge(r.vehicle_type)}</td>
         <td>${escHtml(r.subscription_plans?.name || '—')}</td>
-        <td class="fw-bold">${fmtAmt(r.amount, r.currency)}</td>
+        <td>${fmtDate(r.start_date)}</td>
+        <td>${r.end_date ? fmtDate(r.end_date) : '—'}</td>
+        <td class="fw-bold">${fmtRaw(r.amount, r.currency)}</td>
       </tr>`).join('')}</tbody></table>`;
 
     if (type === 'unpaid-subscribers') return `<table>
-      <thead><tr><th>Client</th><th>Mobile</th><th>Plate</th><th>Vehicle</th><th>Plan</th><th>Rate</th></tr></thead>
+      <thead><tr><th>Invoice #</th><th>Client</th><th>Mobile</th><th>Plate</th><th>Plan</th><th>Month</th><th>Due Date</th><th>Amount</th></tr></thead>
       <tbody>${data.map(r => `<tr>
+        <td><span class="badge badge-warning">${escHtml(r.invoice_number || '—')}</span></td>
         <td><strong>${escHtml(r.clients?.full_name || '—')}</strong></td>
         <td>${escHtml(r.clients?.mobile || '—')}</td>
-        <td>${escHtml(r.plate_number)}</td>
-        <td>${vehicleBadge(r.vehicle_type)}</td>
+        <td>${escHtml(r.client_vehicles?.plate_number || '—')}</td>
         <td>${escHtml(r.subscription_plans?.name || '—')}</td>
-        <td class="fw-bold">${fmtAmt(r.amount, r.currency)}</td>
+        <td>${escHtml(r.invoice_month || '—')}</td>
+        <td class="${r.due_date && r.due_date < today() ? 'text-danger' : ''}">${fmtDate(r.due_date)}</td>
+        <td class="fw-bold text-danger">${fmtRaw(r.final_amount, r.currency)}</td>
       </tr>`).join('')}</tbody></table>`;
 
     if (type === 'currently-parked') return `<table>
-      <thead><tr><th>Plate</th><th>Type</th><th>Company</th><th>Entry Time</th><th>Duration</th><th>Notes</th></tr></thead>
+      <thead><tr><th>Plate</th><th>Type</th><th>Company</th><th>Entry Time</th><th>Exit Time</th><th>Duration</th><th>Status</th><th>Notes</th></tr></thead>
       <tbody>${data.map(r => {
-        const mins = Math.round((Date.now() - new Date(r.entry_time)) / 60000);
+        const endTime = r.exit_time ? new Date(r.exit_time) : Date.now();
+        const mins = Math.round((endTime - new Date(r.entry_time)) / 60000);
         return `<tr>
           <td><strong>${escHtml(r.plate_number)}</strong></td>
           <td>${vehicleBadge(r.vehicle_type)}</td>
           <td>${r.third_party_company ? `<span class="badge badge-purple" style="font-size:10px">${escHtml(r.third_party_company)}</span>` : '<span class="text-muted">—</span>'}</td>
           <td>${fmtDateTime(r.entry_time)}</td>
+          <td>${r.exit_time ? fmtDateTime(r.exit_time) : '<span class="badge badge-success">Still inside</span>'}</td>
           <td>${fmtDuration(mins)}</td>
+          <td>${statusBadge(r.parking_status)}</td>
+          <td class="text-muted">${escHtml(r.notes || '—')}</td>
+        </tr>`;
+      }).join('')}</tbody></table>`;
+
+    if (type === 'third-party-parked') return `<table>
+      <thead><tr><th>Plate</th><th>Type</th><th>Company</th><th>Entry Time</th><th>Exit Time</th><th>Duration</th><th>Status</th><th>Notes</th></tr></thead>
+      <tbody>${data.map(r => {
+        const endTime = r.exit_time ? new Date(r.exit_time) : Date.now();
+        const mins = Math.round((endTime - new Date(r.entry_time)) / 60000);
+        return `<tr>
+          <td><strong>${escHtml(r.plate_number)}</strong></td>
+          <td>${vehicleBadge(r.vehicle_type)}</td>
+          <td><span class="badge badge-purple">${escHtml(r.third_party_company)}</span></td>
+          <td>${fmtDateTime(r.entry_time)}</td>
+          <td>${r.exit_time ? fmtDateTime(r.exit_time) : '<span class="badge badge-success">Still inside</span>'}</td>
+          <td>${fmtDuration(mins)}</td>
+          <td>${statusBadge(r.parking_status)}</td>
           <td class="text-muted">${escHtml(r.notes || '—')}</td>
         </tr>`;
       }).join('')}</tbody></table>`;
@@ -271,9 +332,9 @@ const DashboardPage = {
     const map = {
       'total-revenue': 'Total Revenue', 'sub-revenue': 'Subscription Revenue',
       'parking-revenue': 'Parking Revenue', 'services-revenue': 'Services Revenue',
-      'expenses': 'Expenses This Month', 'net-profit': 'Net Profit',
-      'active-subscribers': 'Active Subscribers', 'unpaid-subscribers': 'Unpaid Subscribers This Month',
-      'currently-parked': 'Currently Parked Vehicles'
+      'expenses': 'Expenses', 'net-profit': 'Net Profit',
+      'active-subscribers': 'Active Subscribers', 'unpaid-subscribers': 'Unpaid Subscribers',
+      'currently-parked': 'Vehicles Parked', 'third-party-parked': 'Third Party Vehicles'
     };
     return map[type] || type;
   }

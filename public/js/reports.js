@@ -113,7 +113,7 @@ const ReportsPage = {
         <td>${fmtDateTime(r.entry_time)}</td>
         <td>${r.exit_time ? fmtDateTime(r.exit_time) : '—'}</td>
         <td>${fmtDuration(r.duration_minutes)}</td>
-        <td class="fw-bold">${fmtCurrency(r.amount)}</td>
+        <td class="fw-bold">${fmtRaw(r.amount, r.currency)}</td>
         <td>${statusBadge(r.payment_status)}</td>
         <td>${statusBadge(r.parking_status)}</td>
       </tr>`).join('')}</tbody>
@@ -140,7 +140,7 @@ const ReportsPage = {
               <td>${escHtml(r.plate_number || '—')}</td>
               <td>${fmtCurrency(r.price)}</td>
               <td>${r.discount > 0 ? fmtCurrency(r.discount) : '—'}</td>
-              <td class="fw-bold">${fmtCurrency(r.final_amount)}</td>
+              <td class="fw-bold">${fmtRaw(r.final_amount, r.currency)}</td>
               <td>${statusBadge(r.payment_status)}</td>
             </tr>`).join('')}</tbody>
           </table>` : '<div class="empty-state" style="padding:30px"><i class="fas fa-shower"></i><h4>No records</h4></div>'}
@@ -165,7 +165,7 @@ const ReportsPage = {
               <td>${fmtDate(r.expense_date)}</td>
               <td><span class="badge badge-orange">${escHtml(r.expense_type)}</span></td>
               <td>${escHtml(r.title)}</td>
-              <td class="fw-bold text-danger">${fmtCurrency(r.amount)}</td>
+              <td class="fw-bold text-danger">${fmtRaw(r.amount, r.currency)}</td>
               <td>${escHtml(r.paid_to || '—')}</td>
               <td>${escHtml(r.payment_method || '—')}</td>
             </tr>`).join('')}</tbody>
@@ -193,7 +193,7 @@ const ReportsPage = {
               <td>${escHtml(r.mobile || '—')}</td>
               <td>${escHtml(r.plate_number)}</td>
               <td>${escHtml(r.invoice_month)}</td>
-              <td class="fw-bold text-danger">${fmtCurrency(r.final_amount)}</td>
+              <td class="fw-bold text-danger">${fmtRaw(r.final_amount, r.currency)}</td>
               <td>${r.due_date && r.due_date < today() ? `<span class="text-danger">${fmtDate(r.due_date)}</span>` : fmtDate(r.due_date)}</td>
               <td>${statusBadge(r.payment_status)}</td>
             </tr>`).join('')}</tbody>
@@ -218,7 +218,7 @@ const ReportsPage = {
               <td>${vehicleBadge(r.vehicle_type)}</td>
               <td>${escHtml(r.plan_name || '—')}</td>
               <td>${fmtDate(r.end_date)}</td>
-              <td>${fmtCurrency(r.amount)}</td>
+              <td>${fmtRaw(r.amount, r.currency)}</td>
             </tr>`).join('')}</tbody>
           </table>` : '<div class="empty-state" style="padding:30px"><i class="fas fa-users"></i><h4>No active clients</h4></div>'}
         </div>
@@ -241,7 +241,7 @@ const ReportsPage = {
               <td>${vehicleBadge(r.vehicle_type)}</td>
               <td>${escHtml(r.plan_name || '—')}</td>
               <td class="text-danger">${fmtDate(r.end_date)}</td>
-              <td>${fmtCurrency(r.amount)}</td>
+              <td>${fmtRaw(r.amount, r.currency)}</td>
             </tr>`).join('')}</tbody>
           </table>` : '<div class="empty-state" style="padding:30px"><i class="fas fa-clock"></i><h4>No expired subscriptions</h4></div>'}
         </div>

@@ -40,7 +40,7 @@ const ServicesPage = {
       <tbody>${rows.map(s => `<tr>
         <td><strong>${escHtml(s.name)}</strong></td>
         <td>${s.vehicle_type === 'both' ? '<span class="badge badge-purple">Both</span>' : vehicleBadge(s.vehicle_type)}</td>
-        <td class="fw-bold">${fmtAmt(s.price, s.currency)}</td>
+        <td class="fw-bold">${fmtRaw(s.price, s.currency)}</td>
         <td class="text-muted">${escHtml(s.description || '—')}</td>
         <td>${statusBadge(s.is_active ? 'active' : 'expired')}</td>
         ${Auth.isAdmin() ? `<td class="actions">

@@ -63,7 +63,7 @@ const TransactionsPage = {
         <td>${escHtml(t.service_name || '—')}</td>
         <td>${fmtAmt(t.price, t.currency)}</td>
         <td>${t.discount > 0 ? fmtAmt(t.discount, t.currency) : '—'}</td>
-        <td class="fw-bold">${fmtAmt(t.final_amount, t.currency)}</td>
+        <td class="fw-bold">${fmtRaw(t.final_amount, t.currency)}</td>
         <td>${statusBadge(t.payment_status)}</td>
         <td class="actions">
           <button class="btn btn-sm btn-outline btn-icon" onclick="TransactionsPage.showEdit(${t.id})"><i class="fas fa-edit"></i></button>

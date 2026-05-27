@@ -54,7 +54,7 @@ const ClientsPage = {
           <td>${escHtml(v.plan_name || '—')}</td>
           <td>${fmtDate(v.start_date)}</td>
           <td>${isExpired ? `<span class="text-danger">${fmtDate(v.end_date)}</span>` : fmtDate(v.end_date)}</td>
-          <td>${fmtAmt(v.amount, v.currency)}</td>
+          <td>${fmtRaw(v.amount, v.currency)}</td>
           <td>${statusBadge(isExpired ? 'expired' : v.status)}</td>
           <td class="actions">
             <button class="btn btn-sm btn-outline btn-icon" onclick="ClientsPage.showClientDetail(${v.client_id})" title="View"><i class="fas fa-eye"></i></button>
@@ -92,7 +92,7 @@ const ClientsPage = {
 
   // --- Add Vehicle ---
   showAddVehicle(clientId) {
-    const planOpts = this.plans.map(p => `<option value="${p.id}">${escHtml(p.name)} (${p.duration}, ${fmtCurrency(p.price)})</option>`).join('');
+    const planOpts = this.plans.map(p => `<option value="${p.id}">${escHtml(p.name)} (${p.duration}, ${fmtRaw(p.price, p.currency)})</option>`).join('');
     Modal.show({ title: 'Add Vehicle', size: 'lg', body: `<form id="modal-form">
       <div class="form-row cols-2">
         <div class="form-group"><label>Plate Number *</label><input name="plate_number" required placeholder="ABC 1234" style="text-transform:uppercase"></div>
@@ -135,7 +135,7 @@ const ClientsPage = {
       <td>${escHtml(v.vehicle_model || '—')}</td>
       <td>${escHtml(v.plan_name || '—')}</td>
       <td>${fmtDate(v.end_date)}</td>
-      <td>${fmtAmt(v.amount, v.currency)}</td>
+      <td>${fmtRaw(v.amount, v.currency)}</td>
       <td>${statusBadge(v.status)}</td>
       <td>
         <button class="btn btn-sm btn-outline btn-icon" onclick="ClientsPage.showEditVehicle(${v.id})"><i class="fas fa-edit"></i></button>
@@ -185,7 +185,7 @@ const ClientsPage = {
   async showEditVehicle(vehicleId) {
     const v = this.vehicles.find(x => x.id === vehicleId);
     if (!v) return;
-    const planOpts = this.plans.map(p => `<option value="${p.id}" ${v.subscription_plan_id==p.id?'selected':''}>${escHtml(p.name)} (${fmtCurrency(p.price)})</option>`).join('');
+    const planOpts = this.plans.map(p => `<option value="${p.id}" ${v.subscription_plan_id==p.id?'selected':''}>${escHtml(p.name)} (${fmtRaw(p.price, p.currency)})</option>`).join('');
     Modal.show({ title: 'Edit Vehicle', size: 'lg', body: `<form id="modal-form">
       <div class="form-row cols-2">
         <div class="form-group"><label>Plate Number *</label><input name="plate_number" required value="${escHtml(v.plate_number)}"></div>

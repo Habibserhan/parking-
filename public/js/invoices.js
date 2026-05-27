@@ -59,9 +59,9 @@ const InvoicesPage = {
           <td>${escHtml(i.plate_number)}</td>
           <td class="text-muted">${escHtml(i.plan_name || '—')}</td>
           <td>${escHtml(i.invoice_month)}</td>
-          <td>${fmtAmt(i.amount, i.currency)}</td>
-          <td>${i.discount > 0 ? fmtAmt(i.discount, i.currency) : '—'}</td>
-          <td class="fw-bold">${fmtAmt(i.final_amount, i.currency)}</td>
+          <td>${fmtRaw(i.amount, i.currency)}</td>
+          <td>${i.discount > 0 ? fmtRaw(i.discount, i.currency) : '—'}</td>
+          <td class="fw-bold">${fmtRaw(i.final_amount, i.currency)}</td>
           <td>${isOverdue ? `<span class="text-danger">${fmtDate(i.due_date)}</span>` : fmtDate(i.due_date)}</td>
           <td>${statusBadge(i.payment_status)}</td>
           <td class="actions">
@@ -267,14 +267,14 @@ const InvoicesPage = {
           <td>${escHtml(inv.vehicle_type || '')}</td>
           <td>${escHtml(inv.plate_number)}</td>
           <td>${escHtml(inv.plan_name || '—')}</td>
-          <td style="text-align:right">${fmtAmt(inv.amount, inv.currency)}</td>
+          <td style="text-align:right">${fmtRaw(inv.amount, inv.currency)}</td>
         </tr>
       </tbody>
     </table>
     <div class="total-section">
-      <div class="total-row"><span>Subtotal</span><span>${fmtAmt(inv.amount, inv.currency)}</span></div>
-      ${inv.discount > 0 ? `<div class="total-row"><span>Discount</span><span>-${fmtAmt(inv.discount, inv.currency)}</span></div>` : ''}
-      <div class="total-row total-final"><span>Total Due</span><span>${fmtAmt(inv.final_amount, inv.currency)}</span></div>
+      <div class="total-row"><span>Subtotal</span><span>${fmtRaw(inv.amount, inv.currency)}</span></div>
+      ${inv.discount > 0 ? `<div class="total-row"><span>Discount</span><span>-${fmtRaw(inv.discount, inv.currency)}</span></div>` : ''}
+      <div class="total-row total-final"><span>Total Due</span><span>${fmtRaw(inv.final_amount, inv.currency)}</span></div>
     </div>
     ${inv.payment_status === 'paid' ? `<div style="margin-top:20px;color:#15803d;font-weight:600">✓ Paid on ${fmtDate(inv.payment_date)} via ${escHtml(inv.payment_method || '')}</div>` : ''}
     <div class="signatures">
@@ -312,9 +312,9 @@ const InvoicesPage = {
         <td>${inv.plate_number || '—'}</td>
         <td style="color:#64748b">${inv.plan_name || '—'}</td>
         <td>${inv.invoice_month}</td>
-        <td>${fmtAmt(inv.amount, inv.currency)}</td>
-        <td style="color:#d97706">${inv.discount > 0 ? fmtAmt(inv.discount, inv.currency) : '—'}</td>
-        <td style="font-weight:700">${fmtAmt(inv.final_amount, inv.currency)}</td>
+        <td>${fmtRaw(inv.amount, inv.currency)}</td>
+        <td style="color:#d97706">${inv.discount > 0 ? fmtRaw(inv.discount, inv.currency) : '—'}</td>
+        <td style="font-weight:700">${fmtRaw(inv.final_amount, inv.currency)}</td>
         <td style="color:${overdue ? '#dc2626' : '#64748b'}">${inv.due_date || '—'}${overdue ? ' ⚠' : ''}</td>
         <td><span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;background:${statusBg[inv.payment_status] || '#f1f5f9'};color:${statusColor[inv.payment_status] || '#64748b'}">${inv.payment_status.replace('_', ' ').toUpperCase()}</span></td>
       </tr>`;
