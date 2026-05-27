@@ -854,6 +854,41 @@ tbody td.actions { white-space: nowrap; }
   .btn { padding: 7px 12px; font-size: 12px; }
 }
 
+/* ======== TABLET RESPONSIVE (768px – 1024px) ======== */
+@media (min-width: 481px) and (max-width: 1024px) {
+  /* Stats grid: 3 columns on landscape tablet, 2 on portrait */
+  .stats-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  /* Smaller stat card padding */
+  .stat-card { padding: 14px 12px; gap: 10px; }
+  .stat-icon { width: 38px; height: 38px; font-size: 16px; }
+  .stat-value { font-size: 18px; }
+  .stat-label { font-size: 12px; }
+  .stat-sub { font-size: 11px; }
+
+  /* Page header stacks on portrait tablet */
+  .page-header { flex-wrap: wrap; gap: 10px; }
+  .page-actions { flex-wrap: wrap; gap: 8px; }
+  .month-selector input { font-size: 13px; }
+
+  /* Detail panel table: always scrollable */
+  #dash-detail-panel .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  #dash-detail-panel table { min-width: 540px; font-size: 12px; }
+  #dash-detail-panel td, #dash-detail-panel th { padding: 6px 8px; }
+
+  /* Summary breakdown rows: full width */
+  #dash-detail-panel > .card > .table-wrap > div { padding: 14px; }
+}
+
+/* Portrait tablet only (768px – 820px): drop to 2 columns */
+@media (min-width: 481px) and (max-width: 820px) {
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
 /* ======== PRINT INVOICE ======== */
 @media print {
   .no-print { display: none !important; }
@@ -879,7 +914,8 @@ tbody td.actions { white-space: nowrap; }
 /* ======== MONTH SELECTOR ======== */
 .month-selector { display: flex; align-items: center; gap: 8px; }
 .month-selector label { font-weight: 500; font-size: 13px; }
-.month-selector input[type=month] { padding: 7px 10px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; }
+.month-selector input[type=month],
+.month-selector input[type=date] { padding: 7px 10px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; }
 
 /* ======== LOADING ======== */
 .loading {
