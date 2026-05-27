@@ -40,7 +40,6 @@ const ReportsPage = {
             </div>
             <button class="btn btn-primary" onclick="ReportsPage.loadReport()"><i class="fas fa-search"></i> Run Report</button>
             <button class="btn btn-outline" onclick="ReportsPage.exportData()"><i class="fas fa-download"></i> Export CSV</button>
-            <button class="btn btn-outline" onclick="window.print()"><i class="fas fa-print"></i> Print</button>
           </div>
         </div>
       </div>

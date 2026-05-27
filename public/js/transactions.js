@@ -6,6 +6,7 @@ const TransactionsPage = {
   data: [],
   services: [],
   clients: [],
+  _currency: 'USD',
 
   async render() {
     [this.data, this.services, this.clients] = await Promise.all([
@@ -13,12 +14,19 @@ const TransactionsPage = {
       API.get('/services?active=true'),
       API.get('/clients')
     ]);
-    const totalPaid = this.data.filter(t => t.payment_status === 'paid').reduce((s, t) => s + t.final_amount, 0);
     return `
       <div class="page-header">
         <div class="page-title"><h2>Daily Services</h2><p>Record wash and cleaning transactions</p></div>
         <div class="page-actions">
-          <span class="badge badge-success" style="font-size:14px;padding:8px 14px">Today: ${fmtCurrency(totalPaid)}</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="display:flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;height:38px">
+              <button id="tx-btn-usd" onclick="TransactionsPage.setCurrency('USD')"
+                style="padding:0 14px;border:none;background:var(--primary);color:#fff;font-weight:700;cursor:pointer;font-size:13px;transition:.15s">$ USD</button>
+              <button id="tx-btn-lbp" onclick="TransactionsPage.setCurrency('LBP')"
+                style="padding:0 14px;border:none;background:transparent;color:var(--text-muted);font-weight:700;cursor:pointer;font-size:13px;transition:.15s">LL LBP</button>
+            </div>
+            <span id="tx-total-badge" class="badge badge-success" style="font-size:14px;padding:8px 14px">${this._fmtTotal(this.data)}</span>
+          </div>
           <button class="btn btn-primary" onclick="TransactionsPage.showAdd()"><i class="fas fa-plus"></i> New Service</button>
         </div>
       </div>
@@ -104,7 +112,7 @@ const TransactionsPage = {
   },
 
   showAdd() {
-    Modal.show({ title: 'New Service Transaction', size: 'lg', body: this._formHtml(), onSave: async () => {
+    Modal.show({ title: 'New Service Transaction', size: 'sm', body: this._formHtml(), onSave: async () => {
       const data = Modal.getFormData();
       await API.post('/transactions', { ...data, price: Number(data.price), discount: 0, final_amount: Number(data.price) });
       Modal.close(); Toast.success('Service recorded'); this.applyFilter();
@@ -114,12 +122,29 @@ const TransactionsPage = {
 
   showEdit(id) {
     const t = this.data.find(x => x.id === id);
-    Modal.show({ title: 'Edit Transaction', size: 'lg', body: this._formHtml(t), onSave: async () => {
+    Modal.show({ title: 'Edit Transaction', size: 'sm', body: this._formHtml(t), onSave: async () => {
       const data = Modal.getFormData();
       await API.put(`/transactions/${id}`, { ...data, price: Number(data.price), discount: 0, final_amount: Number(data.price) });
       Modal.close(); Toast.success('Updated'); this.applyFilter();
     }});
     setTimeout(() => this.fillPrice(), 50);
+  },
+
+  _fmtTotal(data) {
+    const cur = this._currency;
+    const total = data.filter(t => t.payment_status === 'paid' && (t.currency || 'USD') === cur)
+                      .reduce((s, t) => s + (Number(t.final_amount) || 0), 0);
+    return fmtRaw(total, cur);
+  },
+
+  setCurrency(cur) {
+    this._currency = cur;
+    const usd = document.getElementById('tx-btn-usd');
+    const lbp = document.getElementById('tx-btn-lbp');
+    if (usd) { usd.style.background = cur === 'USD' ? 'var(--primary)' : 'transparent'; usd.style.color = cur === 'USD' ? '#fff' : 'var(--text-muted)'; }
+    if (lbp) { lbp.style.background = cur === 'LBP' ? 'var(--primary)' : 'transparent'; lbp.style.color = cur === 'LBP' ? '#fff' : 'var(--text-muted)'; }
+    const badge = document.getElementById('tx-total-badge');
+    if (badge) badge.textContent = this._fmtTotal(this.data);
   },
 
   async applyFilter() {
@@ -138,6 +163,8 @@ const TransactionsPage = {
     if (status) params.set('payment_status', status);
     this.data = await API.get(`/transactions?${params}`);
     document.getElementById('tx-table').innerHTML = this.renderTable(this.data);
+    const badge = document.getElementById('tx-total-badge');
+    if (badge) badge.textContent = this._fmtTotal(this.data);
   },
 
   async deleteRecord(id) {

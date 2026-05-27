@@ -110,7 +110,7 @@ const DashboardPage = {
   _fmtServiceRevenue(byCurrency) {
     const entries = Object.entries(byCurrency || {}).filter(([, v]) => v > 0);
     if (!entries.length) return fmtAmt(0, 'USD');
-    return entries.map(([cur, amt]) => fmtAmt(amt, cur)).join(' · ');
+    return entries.map(([cur, amt]) => fmtAmt(amt, cur)).join('<br>');
   },
 
   _fmtMoney(value) {
@@ -140,13 +140,14 @@ const DashboardPage = {
 
   _card(icon, color, label, value, sub, type) {
     const v = String(value);
-    const fs = v.length > 14 ? '13px' : v.length > 11 ? '16px' : v.length > 8 ? '20px' : '24px';
+    const textLen = v.replace(/<[^>]+>/g, '').split('<br>')[0].length;
+    const fs = textLen > 14 ? '13px' : textLen > 11 ? '16px' : textLen > 8 ? '20px' : '24px';
     const active = this._activeType === type;
     return `<div class="stat-card dash-stat-clickable${active ? ' dash-stat-active' : ''}" onclick="DashboardPage.showDetails('${type}')" title="Click to view details">
       <div class="stat-icon ${color}"><i class="fas ${icon}"></i></div>
       <div class="stat-info">
         <div class="stat-label">${escHtml(label)}</div>
-        <div class="stat-value" style="font-size:${fs};word-break:break-word;line-height:1.2">${escHtml(v)}</div>
+        <div class="stat-value" style="font-size:${fs};word-break:break-word;line-height:1.5">${v}</div>
         <div class="stat-sub">${escHtml(sub)}</div>
       </div>
     </div>`;

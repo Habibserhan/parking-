@@ -38,14 +38,12 @@ const ClientsPage = {
 
   renderTable(rows) {
     if (!rows.length) return `<div class="empty-state"><i class="fas fa-users"></i><h4>No clients found</h4><p>Add your first subscription client.</p></div>`;
-    const today_str = today();
     return `<table>
       <thead><tr>
         <th>Client Name</th><th>Mobile</th><th>Plate</th><th>Vehicle</th><th>Plan</th><th>Start</th><th>Amount</th><th>Status</th><th>Actions</th>
       </tr></thead>
       <tbody>${rows.map(v => {
-        const isExpired = v.end_date && v.end_date < today_str;
-        const rowClass = isExpired ? 'row-expired' : '';
+        const rowClass = v.status === 'expired' ? 'row-expired' : '';
         return `<tr class="${rowClass}">
           <td><strong>${escHtml(v.full_name)}</strong></td>
           <td>${escHtml(v.mobile || '—')}</td>
@@ -54,7 +52,7 @@ const ClientsPage = {
           <td>${escHtml(v.plan_name || '—')}</td>
           <td>${fmtDate(v.start_date)}</td>
           <td>${fmtRaw(v.amount, v.currency)}</td>
-          <td>${statusBadge(isExpired ? 'expired' : v.status)}</td>
+          <td>${statusBadge(v.status)}</td>
           <td class="actions">
             <button class="btn btn-sm btn-outline btn-icon" onclick="ClientsPage.showClientDetail(${v.client_id})" title="View"><i class="fas fa-eye"></i></button>
             <button class="btn btn-sm btn-outline btn-icon" onclick="ClientsPage.showEditVehicle(${v.id})" title="Edit Vehicle"><i class="fas fa-edit"></i></button>

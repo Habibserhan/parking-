@@ -5,17 +5,25 @@ const ExpensesPage = {
   title: 'Expenses',
   adminOnly: true,
   data: [],
+  _currency: 'USD',
 
   TYPES: ['salary', 'rent', 'electricity', 'water', 'maintenance', 'other'],
 
   async render() {
     this.data = await API.get('/expenses');
-    const total = this.data.reduce((s, e) => s + e.amount, 0);
     return `
       <div class="page-header">
         <div class="page-title"><h2>Expenses</h2><p>Track business expenses</p></div>
         <div class="page-actions">
-          <span class="badge badge-danger" style="font-size:14px;padding:8px 14px">Total: ${fmtCurrency(total)}</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="display:flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;height:38px">
+              <button id="exp-btn-usd" onclick="ExpensesPage.setCurrency('USD')"
+                style="padding:0 14px;border:none;background:var(--primary);color:#fff;font-weight:700;cursor:pointer;font-size:13px;transition:.15s">$ USD</button>
+              <button id="exp-btn-lbp" onclick="ExpensesPage.setCurrency('LBP')"
+                style="padding:0 14px;border:none;background:transparent;color:var(--text-muted);font-weight:700;cursor:pointer;font-size:13px;transition:.15s">LL LBP</button>
+            </div>
+            <span id="exp-total-badge" class="badge badge-danger" style="font-size:14px;padding:8px 14px">${this._fmtTotal(this.data)}</span>
+          </div>
           <button class="btn btn-primary" onclick="ExpensesPage.showAdd()"><i class="fas fa-plus"></i> Add Expense</button>
         </div>
       </div>
@@ -43,14 +51,13 @@ const ExpensesPage = {
 
   renderTable(rows) {
     if (!rows.length) return `<div class="empty-state"><i class="fas fa-receipt"></i><h4>No expenses found</h4><p>Record business expenses here.</p></div>`;
-    const total = rows.reduce((s, r) => s + r.amount, 0);
     return `<table>
       <thead><tr><th>Date</th><th>Type</th><th>Title</th><th>Amount</th><th>Paid To</th><th>Method</th><th>Notes</th><th>Actions</th></tr></thead>
       <tbody>${rows.map(e => `<tr>
         <td>${fmtDate(e.expense_date)}</td>
         <td><span class="badge badge-orange">${escHtml(e.expense_type)}</span></td>
         <td><strong>${escHtml(e.title)}</strong></td>
-        <td class="fw-bold text-danger">${fmtAmt(e.amount, e.currency)}</td>
+        <td class="fw-bold text-danger">${fmtRaw(e.amount, e.currency)}</td>
         <td>${escHtml(e.paid_to || '—')}</td>
         <td>${escHtml(e.payment_method || '—')}</td>
         <td class="text-muted">${escHtml(e.notes || '—')}</td>
@@ -61,7 +68,7 @@ const ExpensesPage = {
       </tr>`).join('')}
       <tr style="background:#fef2f2">
         <td colspan="3" class="fw-bold text-right">Total</td>
-        <td class="fw-bold text-danger">${fmtCurrency(total)}</td>
+        <td class="fw-bold text-danger">${this._fmtTotal(rows)}</td>
         <td colspan="4"></td>
       </tr>
       </tbody>
@@ -90,6 +97,23 @@ const ExpensesPage = {
       </div>
       <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea name="notes">${escHtml(e.notes || '')}</textarea></div>
     </div></form>`;
+  },
+
+  _fmtTotal(data) {
+    const cur = this._currency;
+    const total = data.filter(e => (e.currency || 'USD') === cur)
+                      .reduce((s, e) => s + (Number(e.amount) || 0), 0);
+    return fmtRaw(total, cur);
+  },
+
+  setCurrency(cur) {
+    this._currency = cur;
+    const usd = document.getElementById('exp-btn-usd');
+    const lbp = document.getElementById('exp-btn-lbp');
+    if (usd) { usd.style.background = cur === 'USD' ? 'var(--primary)' : 'transparent'; usd.style.color = cur === 'USD' ? '#fff' : 'var(--text-muted)'; }
+    if (lbp) { lbp.style.background = cur === 'LBP' ? 'var(--primary)' : 'transparent'; lbp.style.color = cur === 'LBP' ? '#fff' : 'var(--text-muted)'; }
+    const badge = document.getElementById('exp-total-badge');
+    if (badge) badge.textContent = this._fmtTotal(this.data);
   },
 
   showAdd() {
@@ -124,9 +148,8 @@ const ExpensesPage = {
     try {
       this.data = await API.get(`/expenses?${params}`);
       document.getElementById('exp-table').innerHTML = this.renderTable(this.data);
-      const total = this.data.reduce((s, e) => s + e.amount, 0);
-      const totalBadge = document.querySelector('.badge.badge-danger');
-      if (totalBadge) totalBadge.textContent = `Total: ${fmtCurrency(total)}`;
+      const badge = document.getElementById('exp-total-badge');
+      if (badge) badge.textContent = this._fmtTotal(this.data);
     } catch (e) {
       Toast.error('Filter failed: ' + e.message);
     }

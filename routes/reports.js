@@ -112,21 +112,10 @@ router.get('/active-clients', authenticate, async (req, res) => {
 
 router.get('/expired-subscriptions', authenticate, async (req, res) => {
   try {
-    const today = todayStr();
-    const { data: byStatus } = await sb.from('client_vehicles')
+    const { data } = await sb.from('client_vehicles')
       .select('*, clients(full_name, mobile), subscription_plans(name)')
       .eq('status', 'expired');
-    const { data: byDate } = await sb.from('client_vehicles')
-      .select('*, clients(full_name, mobile), subscription_plans(name)')
-      .not('end_date', 'is', null)
-      .lt('end_date', today);
-
-    const seen = new Set();
-    const merged = [...(byStatus || []), ...(byDate || [])].filter(v => {
-      if (seen.has(v.id)) return false;
-      seen.add(v.id); return true;
-    });
-    const result = merged.map(v => ({
+    const result = (data || []).map(v => ({
       ...v,
       full_name: v.clients?.full_name || '',
       mobile:    v.clients?.mobile    || '',

@@ -11,8 +11,11 @@ const ThirdPartyPage = {
     return `
       <div class="page-header">
         <div class="page-title"><h2>Third Party</h2><p>Monthly billing per company</p></div>
-        <div class="page-actions">
-          <input type="month" id="tp-month" value="${currentMonth()}">
+        <div class="page-actions" style="flex-wrap:wrap;gap:8px">
+          <label style="font-size:13px;color:var(--text-muted);white-space:nowrap;line-height:38px">From</label>
+          <input type="date" id="tp-from" value="${new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0,10)}" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;height:38px">
+          <label style="font-size:13px;color:var(--text-muted);white-space:nowrap;line-height:38px">To</label>
+          <input type="date" id="tp-to" value="${today()}" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;height:38px">
           <button class="btn btn-primary" onclick="ThirdPartyPage.loadData()"><i class="fas fa-search"></i> Load</button>
         </div>
       </div>
@@ -29,21 +32,18 @@ const ThirdPartyPage = {
   },
 
   async loadData() {
-    const month = document.getElementById('tp-month')?.value || currentMonth();
-    const [year, mon] = month.split('-');
-    const lastDay = new Date(Number(year), Number(mon), 0).getDate();
-    const from = `${year}-${mon}-01`;
-    const to = `${year}-${mon}-${String(lastDay).padStart(2, '0')}`;
+    const from = document.getElementById('tp-from')?.value || (currentMonth() + '-01');
+    const to   = document.getElementById('tp-to')?.value   || today();
     try {
       const params = new URLSearchParams({ date_from: from, date_to: to, is_third_party: 'true' });
       this.data = await API.get(`/daily-parking?${params}`);
-      this.renderContent(month);
+      this.renderContent(from, to);
     } catch (e) {
       document.getElementById('tp-content').innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h4>${escHtml(e.message)}</h4></div>`;
     }
   },
 
-  renderContent(month) {
+  renderContent(from, to) {
     const companies = this._getCompanies();
     if (!companies.length) {
       document.getElementById('tp-content').innerHTML = `<div class="empty-state"><i class="fas fa-building"></i><h4>No third party companies configured</h4><p>Go to Users &amp; Settings to add companies.</p></div>`;
@@ -97,7 +97,9 @@ const ThirdPartyPage = {
   printInvoice(companyName) {
     const company = this._getCompanies().find(c => c.name === companyName);
     if (!company) return;
-    const month = document.getElementById('tp-month')?.value || currentMonth();
+    const from  = document.getElementById('tp-from')?.value || (currentMonth() + '-01');
+    const to    = document.getElementById('tp-to')?.value   || today();
+    const month = `${from} → ${to}`;
     const rate = Number(company.rate);
     const vehicleMap = {};
     this.data.filter(r => r.third_party_company === company.name).forEach(r => {
