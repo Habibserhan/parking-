@@ -349,9 +349,7 @@ const VEHICLE_TYPES = [
   { value: 'motorcycle', label: 'Motorcycle',  icon: 'fa-motorcycle' },
   { value: 'van',        label: 'Van',         icon: 'fa-van-shuttle' },
   { value: 'pickup',     label: 'Pickup',      icon: 'fa-truck-pickup' },
-  { value: 'truck',      label: 'Truck',       icon: 'fa-truck' },
-  { value: 'bus',        label: 'Bus',         icon: 'fa-bus' },
-  { value: 'other',      label: 'Other',       icon: 'fa-car-side' },
+  { value: 'range',      label: 'Range',       icon: 'fa-car-side' },
 ];
 
 // Returns <select> options HTML for vehicle types
@@ -438,7 +436,11 @@ function showApp() {
   document.getElementById('app').classList.add('active');
   renderUserInfo();
   loadSettings();
-  Router.navigate('dashboard');
+  const perms = Auth.user?.page_permissions;
+  const startPage = (Array.isArray(perms) && !perms.includes('dashboard'))
+    ? (perms[0] || 'dashboard')
+    : 'dashboard';
+  Router.navigate(startPage);
 }
 
 // ---------- Login ----------
@@ -453,12 +455,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const btn = loginForm.querySelector('button[type=submit]');
       const err = document.getElementById('login-error');
       btn.disabled = true; btn.textContent = 'Logging in…';
-      err.textContent = '';
+      if (err) err.textContent = '';
       try {
         await Auth.login(loginForm.email.value, loginForm.password.value);
         showApp();
       } catch (ex) {
-        err.textContent = ex.message || 'Login failed';
+        Toast.error(ex.message || 'Login failed');
       } finally {
         btn.disabled = false; btn.textContent = 'Login';
       }
