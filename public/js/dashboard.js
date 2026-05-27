@@ -13,8 +13,11 @@ const DashboardPage = {
       <div class="page-header">
         <div class="page-title"><h2>Dashboard</h2><p>Parking business overview</p></div>
         <div class="page-actions" style="flex-wrap:wrap;gap:8px">
-          <!-- Date picker (always visible) -->
-          <input type="date" id="dash-month" value="${today()}" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;height:38px">
+          <!-- Date range -->
+          <label style="font-size:13px;color:var(--text-muted);white-space:nowrap;line-height:38px">From</label>
+          <input type="date" id="dash-from" value="${today()}" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;height:38px">
+          <label style="font-size:13px;color:var(--text-muted);white-space:nowrap;line-height:38px">To</label>
+          <input type="date" id="dash-to" value="${today()}" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;height:38px">
           <!-- All Data toggle -->
           <button id="dash-btn-all" onclick="DashboardPage.setMode(DashboardPage._mode==='all'?'date':'all')"
             style="padding:0 16px;border:1.5px solid var(--border);border-radius:8px;background:transparent;color:var(--text-muted);font-weight:600;cursor:pointer;font-size:13px;height:38px;transition:.15s">
@@ -37,12 +40,14 @@ const DashboardPage = {
   },
 
   async init() {
-    document.getElementById('dash-month').addEventListener('change', () => {
+    const onChange = () => {
       this._mode = 'date';
       this._updateAllBtn();
       this._activeType = null;
       this.loadData();
-    });
+    };
+    document.getElementById('dash-from').addEventListener('change', onChange);
+    document.getElementById('dash-to').addEventListener('change', onChange);
     this.loadData();
   },
 
@@ -68,8 +73,9 @@ const DashboardPage = {
     if (mode === 'all') {
       query = '/dashboard?mode=all';
     } else {
-      const date = document.getElementById('dash-month')?.value || today();
-      query = `/dashboard?date=${date}&mode=date`;
+      const from = document.getElementById('dash-from')?.value || today();
+      const to   = document.getElementById('dash-to')?.value   || today();
+      query = `/dashboard?date_from=${from}&date_to=${to}&mode=date`;
     }
     try {
       const d = await API.get(query);
@@ -116,7 +122,9 @@ const DashboardPage = {
   },
 
   _statCards(s) {
-    const period = this._mode === 'all' ? 'All time' : (document.getElementById('dash-month')?.value || today());
+    const from   = document.getElementById('dash-from')?.value || today();
+    const to     = document.getElementById('dash-to')?.value   || today();
+    const period = this._mode === 'all' ? 'All time' : (from === to ? from : `${from} → ${to}`);
     return `
       ${this._card('fa-dollar-sign',        'blue',   'Total Revenue',        this._fmtMoney(s.totalRevenue),    period, 'total-revenue')}
       ${this._card('fa-file-invoice',       'purple', 'Subscription Revenue', this._fmtMoney(s.subRevenue),      period, 'sub-revenue')}
@@ -145,7 +153,7 @@ const DashboardPage = {
   },
 
   async showDetails(type) {
-    const month = document.getElementById('dash-month')?.value || today();
+    const month = document.getElementById('dash-from')?.value || today();
     const s = this._stats;
 
     // Toggle off if same card clicked again
@@ -182,9 +190,10 @@ const DashboardPage = {
 
     // API-based types
     try {
-      const date = document.getElementById('dash-month')?.value || today();
+      const dateFrom = document.getElementById('dash-from')?.value || today();
+      const dateTo   = document.getElementById('dash-to')?.value   || today();
       const modeParam = this._mode === 'all' ? 'all' : 'date';
-      const data = await API.get(`/dashboard/details?type=${type}&date=${date}&mode=${modeParam}`);
+      const data = await API.get(`/dashboard/details?type=${type}&date_from=${dateFrom}&date_to=${dateTo}&mode=${modeParam}`);
       const html = this._buildTable(type, data);
       panel.innerHTML = this._panelWrap(this._typeLabel(type), html, data.length);
     } catch (e) {

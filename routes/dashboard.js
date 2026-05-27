@@ -8,11 +8,14 @@ function sum(arr, key) { return arr.reduce((s, r) => s + (Number(r[key]) || 0), 
 
 router.get('/', authenticate, async (req, res) => {
   try {
-    const mode = req.query.mode || 'date';
-    const date  = req.query.date || new Date().toISOString().slice(0, 10);
-    const month = date.slice(0, 7);
-    const dayStart = `${date}T00:00:00`;
-    const dayEnd   = `${date}T23:59:59`;
+    const mode    = req.query.mode || 'date';
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const dateFrom = req.query.date_from || req.query.date || todayStr;
+    const dateTo   = req.query.date_to   || dateFrom;
+    const monthFrom = dateFrom.slice(0, 7);
+    const monthTo   = dateTo.slice(0, 7);
+    const dayStart  = `${dateFrom}T00:00:00`;
+    const dayEnd    = `${dateTo}T23:59:59`;
     const all = mode === 'all';
 
     let parkQ      = sb.from('daily_parking').select('amount').eq('payment_status', 'paid');
@@ -23,13 +26,13 @@ router.get('/', authenticate, async (req, res) => {
 
     if (!all) {
       parkQ      = parkQ.gte('entry_time', dayStart).lte('entry_time', dayEnd);
-      svcQ       = svcQ.eq('service_date', date);
-      expQ       = expQ.eq('expense_date', date);
-      invQ       = invQ.eq('invoice_month', month);
-      unpaidInvQ = unpaidInvQ.eq('invoice_month', month);
+      svcQ       = svcQ.gte('service_date', dateFrom).lte('service_date', dateTo);
+      expQ       = expQ.gte('expense_date', dateFrom).lte('expense_date', dateTo);
+      invQ       = invQ.gte('invoice_month', monthFrom).lte('invoice_month', monthTo);
+      unpaidInvQ = unpaidInvQ.gte('invoice_month', monthFrom).lte('invoice_month', monthTo);
     }
 
-    let activeQ      = sb.from('client_vehicles').select('id').lte('start_date', date);
+    let activeQ      = sb.from('client_vehicles').select('id').lte('start_date', dateTo);
     let parkedQ      = sb.from('daily_parking').select('id');
     let thirdPartyQ  = sb.from('daily_parking').select('id').not('third_party_company', 'is', null);
 
@@ -38,7 +41,7 @@ router.get('/', authenticate, async (req, res) => {
       parkedQ     = parkedQ.eq('parking_status', 'parked');
       thirdPartyQ = thirdPartyQ.eq('parking_status', 'parked');
     } else {
-      activeQ     = activeQ.or(`end_date.gte.${date},end_date.is.null`);
+      activeQ     = activeQ.or(`end_date.gte.${dateFrom},end_date.is.null`);
       parkedQ     = parkedQ.gte('entry_time', dayStart).lte('entry_time', dayEnd);
       thirdPartyQ = thirdPartyQ.gte('entry_time', dayStart).lte('entry_time', dayEnd);
     }
@@ -80,18 +83,21 @@ router.get('/', authenticate, async (req, res) => {
 
 router.get('/details', authenticate, async (req, res) => {
   try {
-    const { type, date, mode } = req.query;
-    const d        = date || new Date().toISOString().slice(0, 10);
-    const month    = d.slice(0, 7);
-    const dayStart = `${d}T00:00:00`;
-    const dayEnd   = `${d}T23:59:59`;
+    const { type, mode } = req.query;
+    const todayStr  = new Date().toISOString().slice(0, 10);
+    const dateFrom  = req.query.date_from || req.query.date || todayStr;
+    const dateTo    = req.query.date_to   || dateFrom;
+    const monthFrom = dateFrom.slice(0, 7);
+    const monthTo   = dateTo.slice(0, 7);
+    const dayStart  = `${dateFrom}T00:00:00`;
+    const dayEnd    = `${dateTo}T23:59:59`;
     const all = mode === 'all';
 
     if (type === 'sub-revenue') {
       let q = sb.from('invoices')
         .select('invoice_number, final_amount, currency, invoice_month, clients(full_name, mobile), client_vehicles(plate_number, vehicle_type), subscription_plans(name)')
         .eq('payment_status', 'paid').order('final_amount', { ascending: false });
-      if (!all) q = q.eq('invoice_month', month);
+      if (!all) q = q.gte('invoice_month', monthFrom).lte('invoice_month', monthTo);
       const { data } = await q;
       return res.json(data || []);
     }
@@ -109,7 +115,7 @@ router.get('/details', authenticate, async (req, res) => {
       let q = sb.from('service_transactions')
         .select('service_date, final_amount, currency, services(name), clients(full_name)')
         .eq('payment_status', 'paid').order('service_date', { ascending: false });
-      if (!all) q = q.eq('service_date', d);
+      if (!all) q = q.gte('service_date', dateFrom).lte('service_date', dateTo);
       const { data } = await q;
       return res.json(data || []);
     }
@@ -118,7 +124,7 @@ router.get('/details', authenticate, async (req, res) => {
       let q = sb.from('expenses')
         .select('title, expense_type, amount, currency, expense_date, paid_to, payment_method')
         .order('expense_date', { ascending: false });
-      if (!all) q = q.eq('expense_date', d);
+      if (!all) q = q.gte('expense_date', dateFrom).lte('expense_date', dateTo);
       const { data } = await q;
       return res.json(data || []);
     }
@@ -130,7 +136,7 @@ router.get('/details', authenticate, async (req, res) => {
       if (all) {
         q = q.eq('status', 'active');
       } else {
-        q = q.lte('start_date', d).or(`end_date.gte.${d},end_date.is.null`);
+        q = q.lte('start_date', dateTo).or(`end_date.gte.${dateFrom},end_date.is.null`);
       }
       const { data } = await q;
       return res.json(data || []);
@@ -140,7 +146,7 @@ router.get('/details', authenticate, async (req, res) => {
       let q = sb.from('invoices')
         .select('invoice_number, final_amount, currency, invoice_month, due_date, clients(full_name, mobile), client_vehicles(plate_number, vehicle_type), subscription_plans(name)')
         .eq('payment_status', 'unpaid').order('due_date', { ascending: true });
-      if (!all) q = q.eq('invoice_month', month);
+      if (!all) q = q.gte('invoice_month', monthFrom).lte('invoice_month', monthTo);
       const { data } = await q;
       return res.json(data || []);
     }

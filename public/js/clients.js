@@ -41,7 +41,7 @@ const ClientsPage = {
     const today_str = today();
     return `<table>
       <thead><tr>
-        <th>Client Name</th><th>Mobile</th><th>Plate</th><th>Vehicle</th><th>Plan</th><th>Start</th><th>End Date</th><th>Amount</th><th>Status</th><th>Actions</th>
+        <th>Client Name</th><th>Mobile</th><th>Plate</th><th>Vehicle</th><th>Plan</th><th>Start</th><th>Amount</th><th>Status</th><th>Actions</th>
       </tr></thead>
       <tbody>${rows.map(v => {
         const isExpired = v.end_date && v.end_date < today_str;
@@ -53,7 +53,6 @@ const ClientsPage = {
           <td>${vehicleBadge(v.vehicle_type)}</td>
           <td>${escHtml(v.plan_name || '—')}</td>
           <td>${fmtDate(v.start_date)}</td>
-          <td>${isExpired ? `<span class="text-danger">${fmtDate(v.end_date)}</span>` : fmtDate(v.end_date)}</td>
           <td>${fmtRaw(v.amount, v.currency)}</td>
           <td>${statusBadge(isExpired ? 'expired' : v.status)}</td>
           <td class="actions">
@@ -188,8 +187,17 @@ const ClientsPage = {
   async showEditVehicle(vehicleId) {
     const v = this.vehicles.find(x => x.id === vehicleId);
     if (!v) return;
+    let client = {};
+    try { client = await API.get(`/clients/${v.client_id}`); } catch {}
     const planOpts = this.plans.map(p => `<option value="${p.id}" ${v.subscription_plan_id==p.id?'selected':''}>${escHtml(p.name)} (${fmtRaw(p.price, p.currency)})</option>`).join('');
-    Modal.show({ title: 'Edit Vehicle', size: 'lg', body: `<form id="modal-form">
+    Modal.show({ title: 'Edit Client & Vehicle', size: 'lg', body: `<form id="modal-form">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;color:var(--text-muted);letter-spacing:.08em;margin-bottom:10px">Client Details</div>
+      <div class="form-row cols-2">
+        <div class="form-group" style="grid-column:1/-1"><label>Full Name *</label><input name="c_full_name" required value="${escHtml(client.full_name || v.full_name || '')}"></div>
+        <div class="form-group"><label>Mobile</label><input name="c_mobile" value="${escHtml(client.mobile || v.mobile || '')}"></div>
+        <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea name="c_notes">${escHtml(client.notes || '')}</textarea></div>
+      </div>
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;color:var(--text-muted);letter-spacing:.08em;margin:16px 0 10px">Vehicle Details</div>
       <div class="form-row cols-2">
         <div class="form-group"><label>Plate Number *</label><input name="plate_number" required value="${escHtml(v.plate_number)}"></div>
         <div class="form-group"><label>Vehicle Type *</label>
@@ -213,8 +221,11 @@ const ClientsPage = {
     </form>`, onSave: async () => {
       if (!Modal.validate()) throw new Error('Please fill required fields');
       const data = Modal.getFormData();
-      await API.put(`/clients/vehicles/${vehicleId}`, { ...data, amount: Number(data.amount), currency: data.currency || 'USD' });
-      Modal.close(); Toast.success('Vehicle updated'); Router.navigate('clients');
+      await Promise.all([
+        API.put(`/clients/${v.client_id}`, { full_name: data.c_full_name, mobile: data.c_mobile, notes: data.c_notes }),
+        API.put(`/clients/vehicles/${vehicleId}`, { plate_number: data.plate_number, vehicle_type: data.vehicle_type, vehicle_model: data.vehicle_model, subscription_plan_id: data.subscription_plan_id, start_date: data.start_date, amount: Number(data.amount), currency: data.currency || 'USD', status: data.status })
+      ]);
+      Modal.close(); Toast.success('Client & vehicle updated'); Router.navigate('clients');
     }});
     setTimeout(() => {
       document.querySelector('[name=subscription_plan_id]')?.addEventListener('change', e => {

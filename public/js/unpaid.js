@@ -6,19 +6,20 @@ const UnpaidPage = {
   data: [],
 
   async render() {
-    const month = currentMonth();
-    this.data = await API.get(`/invoices/unpaid/subscriptions?invoice_month=${month}`);
+    const todayVal = today();
+    const firstOfMonth = todayVal.slice(0, 7) + '-01';
+    this.data = await API.get(`/invoices/unpaid/subscriptions?date_from=${firstOfMonth}&date_to=${todayVal}`);
     return `
       <div class="page-header">
         <div class="page-title">
           <h2>Unpaid Subscriptions</h2>
-          <p>Active clients without payment for the selected month</p>
+          <p>Active clients without payment in the selected period</p>
         </div>
-        <div class="page-actions">
-          <div class="month-selector">
-            <label>Month:</label>
-            <input type="month" id="unpaid-month" value="${month}">
-          </div>
+        <div class="page-actions" style="flex-wrap:wrap;gap:8px">
+          <label style="font-size:13px;color:var(--text-muted);white-space:nowrap">From</label>
+          <input type="date" id="unpaid-from" value="${firstOfMonth}" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;height:38px">
+          <label style="font-size:13px;color:var(--text-muted);white-space:nowrap">To</label>
+          <input type="date" id="unpaid-to" value="${todayVal}" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;height:38px">
           <button class="btn btn-outline" onclick="UnpaidPage.reload()"><i class="fas fa-sync"></i> Refresh</button>
         </div>
       </div>
@@ -33,7 +34,8 @@ const UnpaidPage = {
   },
 
   init() {
-    document.getElementById('unpaid-month').addEventListener('change', () => this.reload());
+    document.getElementById('unpaid-from').addEventListener('change', () => this.reload());
+    document.getElementById('unpaid-to').addEventListener('change', () => this.reload());
   },
 
   renderTable(rows) {
@@ -63,8 +65,9 @@ const UnpaidPage = {
   },
 
   async reload() {
-    const month = document.getElementById('unpaid-month')?.value || currentMonth();
-    this.data = await API.get(`/invoices/unpaid/subscriptions?invoice_month=${month}`);
+    const from = document.getElementById('unpaid-from')?.value || (today().slice(0, 7) + '-01');
+    const to   = document.getElementById('unpaid-to')?.value   || today();
+    this.data = await API.get(`/invoices/unpaid/subscriptions?date_from=${from}&date_to=${to}`);
     document.getElementById('unpaid-table').innerHTML = this.renderTable(this.data);
     const badge = document.getElementById('unpaid-badge');
     if (badge) badge.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${this.data.length} Unpaid`;
@@ -92,7 +95,8 @@ const UnpaidPage = {
   },
 
   async createInvoice(clientId, vehicleId) {
-    const month = document.getElementById('unpaid-month')?.value || currentMonth();
+    const from = document.getElementById('unpaid-from')?.value || (today().slice(0, 7) + '-01');
+    const month = from.slice(0, 7);
     const vehicle = this.data.find(r => r.vehicle_id === vehicleId);
     Modal.show({ title: 'Create Invoice', size: 'sm', body: `<form id="modal-form">
       <div class="form-row">

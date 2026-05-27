@@ -33,18 +33,23 @@ function flattenInvoice(i) {
 
 router.get('/unpaid/subscriptions', authenticate, async (req, res) => {
   try {
-    const month = req.query.invoice_month || new Date().toISOString().slice(0, 7);
+    const today = new Date().toISOString().slice(0, 10);
+    const dateFrom = req.query.date_from || new Date().toISOString().slice(0, 7) + '-01';
+    const dateTo   = req.query.date_to   || today;
+    const monthFrom = dateFrom.slice(0, 7);
+    const monthTo   = dateTo.slice(0, 7);
 
     const { data: vehicles } = await sb.from('client_vehicles')
-      .select('id, plate_number, vehicle_type, amount, client_id, clients(id, full_name, mobile), subscription_plans(name)')
+      .select('id, plate_number, vehicle_type, amount, currency, client_id, clients(id, full_name, mobile), subscription_plans(name)')
       .eq('status', 'active');
 
     if (!vehicles || !vehicles.length) return res.json([]);
 
     const vehicleIds = vehicles.map(v => v.id);
     const { data: invoices } = await sb.from('invoices')
-      .select('id, vehicle_id, invoice_number, payment_status, final_amount, due_date')
-      .eq('invoice_month', month)
+      .select('id, vehicle_id, invoice_number, payment_status, final_amount, currency, due_date, invoice_month')
+      .gte('invoice_month', monthFrom)
+      .lte('invoice_month', monthTo)
       .in('vehicle_id', vehicleIds);
 
     const invoiceMap = {};

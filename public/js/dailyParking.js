@@ -31,9 +31,11 @@ const DailyParkingPage = {
 
       <div class="filters-bar">
         <input type="text" class="search-input" id="dp-search" placeholder="Search plate number…">
-        <input type="datetime-local" id="dp-from">
-        <input type="datetime-local" id="dp-to">
-        <button class="btn btn-outline" onclick="DailyParkingPage.clearFilter()"><i class="fas fa-times"></i> Clear Filter</button>
+        <label style="font-size:13px;color:var(--text-muted);white-space:nowrap">From</label>
+        <input type="date" id="dp-from" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+        <label style="font-size:13px;color:var(--text-muted);white-space:nowrap">To</label>
+        <input type="date" id="dp-to" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+        <button class="btn btn-outline" onclick="DailyParkingPage.clearFilter()"><i class="fas fa-times"></i> Clear</button>
       </div>
 
       <!-- Check In Tab -->
