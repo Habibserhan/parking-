@@ -107,18 +107,16 @@ const DashboardPage = {
     } catch { return 89500; }
   },
 
-  _fmtServiceRevenue(byCurrency) {
-    const entries = Object.entries(byCurrency || {}).filter(([, v]) => v > 0);
-    if (!entries.length) return fmtAmt(0, 'USD');
-    return entries.map(([cur, amt]) => fmtAmt(amt, cur)).join('<br>');
-  },
-
-  _fmtMoney(value) {
-    if (this._currency === 'LBP') {
-      const lbp = (Number(value) || 0) * this._getLbpRate();
-      return 'LL ' + new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(lbp);
+  _fmtByCurrency(byCurrency) {
+    const cur  = this._currency;
+    const rate = this._getLbpRate(); // 1 USD = rate LBP
+    const usd  = (byCurrency || {}).USD || 0;
+    const lbp  = (byCurrency || {}).LBP || 0;
+    if (cur === 'USD') {
+      return fmtRaw(usd + (lbp / rate), 'USD');
+    } else {
+      return fmtRaw(lbp + (usd * rate), 'LBP');
     }
-    return '$ ' + new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value) || 0);
   },
 
   _statCards(s) {
@@ -126,12 +124,12 @@ const DashboardPage = {
     const to     = document.getElementById('dash-to')?.value   || today();
     const period = this._mode === 'all' ? 'All time' : (from === to ? from : `${from} → ${to}`);
     return `
-      ${this._card('fa-dollar-sign',        'blue',   'Total Revenue',        this._fmtMoney(s.totalRevenue),    period, 'total-revenue')}
-      ${this._card('fa-file-invoice',       'purple', 'Subscription Revenue', this._fmtMoney(s.subRevenue),      period, 'sub-revenue')}
-      ${this._card('fa-car',                'cyan',   'Parking Revenue',      this._fmtMoney(s.parkingRevenue),  period, 'parking-revenue')}
-      ${this._card('fa-shower',             'info',   'Services Revenue',     this._fmtServiceRevenue(s.servicesRevenueByCurrency), period, 'services-revenue')}
-      ${this._card('fa-receipt',            'amber',  'Total Expenses',       this._fmtMoney(s.totalExpenses),   period, 'expenses')}
-      ${this._card('fa-chart-line', s.netProfit >= 0 ? 'green' : 'red', 'Net Profit', this._fmtMoney(s.netProfit), period, 'net-profit')}
+      ${this._card('fa-dollar-sign',        'blue',   'Total Revenue',        this._fmtByCurrency(s.totalRevenueByCurrency),    period, 'total-revenue')}
+      ${this._card('fa-file-invoice',       'purple', 'Subscription Revenue', this._fmtByCurrency(s.subRevenueByCurrency),      period, 'sub-revenue')}
+      ${this._card('fa-car',                'cyan',   'Parking Revenue',      this._fmtByCurrency(s.parkingRevenueByCurrency),  period, 'parking-revenue')}
+      ${this._card('fa-shower',             'info',   'Services Revenue',     this._fmtByCurrency(s.servicesRevenueByCurrency), period, 'services-revenue')}
+      ${this._card('fa-receipt',            'amber',  'Total Expenses',       this._fmtByCurrency(s.expensesByCurrency),        period, 'expenses')}
+      ${this._card('fa-chart-line', (() => { const r=this._getLbpRate(),u=(s.netProfitByCurrency||{}).USD||0,l=(s.netProfitByCurrency||{}).LBP||0; return (this._currency==='USD'?u+l/r:l+u*r)>=0; })() ? 'green' : 'red', 'Net Profit', this._fmtByCurrency(s.netProfitByCurrency), period, 'net-profit')}
       ${this._card('fa-users',              'blue',   'Active Subscribers',   s.activeClients,    this._mode === 'all' ? 'All active clients'   : `Active on ${period}`,       'active-subscribers')}
       ${this._card('fa-exclamation-circle', 'amber',  'Unpaid Subscribers',   s.unpaidClients,    this._mode === 'all' ? 'All unpaid invoices'  : `Unpaid — ${period.slice(0,7)}`, 'unpaid-subscribers')}
       ${this._card('fa-parking',            'cyan',   this._mode === 'all' ? 'Currently Parked' : 'Vehicles Parked', s.currentlyParked, this._mode === 'all' ? 'Live — in lot now' : `Entered on ${period}`, 'currently-parked')}
@@ -174,18 +172,18 @@ const DashboardPage = {
     // Local breakdown types — no API needed
     if (type === 'total-revenue') {
       panel.innerHTML = this._panelWrap('Total Revenue Breakdown', this._summaryTable([
-        { icon: 'fa-file-invoice', color: 'purple', label: 'Subscription Revenue', value: this._fmtMoney(s.subRevenue),      type: 'sub-revenue' },
-        { icon: 'fa-car',          color: 'cyan',   label: 'Parking Revenue',      value: this._fmtMoney(s.parkingRevenue),  type: 'parking-revenue' },
-        { icon: 'fa-shower',       color: 'info',   label: 'Services Revenue',     value: this._fmtServiceRevenue(s.servicesRevenueByCurrency), type: 'services-revenue' },
-      ], { icon: 'fa-dollar-sign', color: 'blue', label: 'Total Revenue', value: this._fmtMoney(s.totalRevenue) }));
+        { icon: 'fa-file-invoice', color: 'purple', label: 'Subscription Revenue', value: this._fmtByCurrency(s.subRevenueByCurrency),      type: 'sub-revenue' },
+        { icon: 'fa-car',          color: 'cyan',   label: 'Parking Revenue',      value: this._fmtByCurrency(s.parkingRevenueByCurrency),  type: 'parking-revenue' },
+        { icon: 'fa-shower',       color: 'info',   label: 'Services Revenue',     value: this._fmtByCurrency(s.servicesRevenueByCurrency), type: 'services-revenue' },
+      ], { icon: 'fa-dollar-sign', color: 'blue', label: 'Total Revenue', value: this._fmtByCurrency(s.totalRevenueByCurrency) }));
       return;
     }
 
     if (type === 'net-profit') {
       panel.innerHTML = this._panelWrap('Net Profit Breakdown', this._summaryTable([
-        { icon: 'fa-dollar-sign', color: 'blue',  label: 'Total Revenue',  value: this._fmtMoney(s.totalRevenue),  type: 'total-revenue' },
-        { icon: 'fa-receipt',     color: 'amber', label: 'Total Expenses', value: this._fmtMoney(s.totalExpenses), type: 'expenses' },
-      ], { icon: 'fa-chart-line', color: s.netProfit >= 0 ? 'green' : 'red', label: 'Net Profit', value: this._fmtMoney(s.netProfit) }));
+        { icon: 'fa-dollar-sign', color: 'blue',  label: 'Total Revenue',  value: this._fmtByCurrency(s.totalRevenueByCurrency), type: 'total-revenue' },
+        { icon: 'fa-receipt',     color: 'amber', label: 'Total Expenses', value: this._fmtByCurrency(s.expensesByCurrency),     type: 'expenses' },
+      ], { icon: 'fa-chart-line', color: (() => { const r=this._getLbpRate(),u=(s.netProfitByCurrency||{}).USD||0,l=(s.netProfitByCurrency||{}).LBP||0; return (this._currency==='USD'?u+l/r:l+u*r)>=0; })() ? 'green' : 'red', label: 'Net Profit', value: this._fmtByCurrency(s.netProfitByCurrency) }));
       return;
     }
 

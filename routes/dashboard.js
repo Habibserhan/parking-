@@ -18,10 +18,10 @@ router.get('/', authenticate, async (req, res) => {
     const dayEnd    = `${dateTo}T23:59:59`;
     const all = mode === 'all';
 
-    let parkQ      = sb.from('daily_parking').select('amount').eq('payment_status', 'paid');
+    let parkQ      = sb.from('daily_parking').select('amount, currency').eq('payment_status', 'paid');
     let svcQ       = sb.from('service_transactions').select('final_amount, currency').eq('payment_status', 'paid');
-    let expQ       = sb.from('expenses').select('amount');
-    let invQ       = sb.from('invoices').select('final_amount').eq('payment_status', 'paid');
+    let expQ       = sb.from('expenses').select('amount, currency');
+    let invQ       = sb.from('invoices').select('final_amount, currency').eq('payment_status', 'paid');
     let unpaidInvQ = sb.from('invoices').select('id').eq('payment_status', 'unpaid');
 
     if (!all) {
@@ -57,18 +57,28 @@ router.get('/', authenticate, async (req, res) => {
       thirdPartyQ
     ]);
 
-    const subRevenue      = sum(paidInvResult.data || [], 'final_amount');
-    const parkingRevenue  = sum(parkResult.data    || [], 'amount');
-    const svcData = svcResult.data || [];
-    const servicesRevenue = sum(svcData, 'final_amount');
-    const servicesRevenueByCurrency = svcData.reduce((acc, r) => {
+    const byCur = (arr, key) => arr.reduce((acc, r) => {
       const cur = r.currency || 'USD';
-      acc[cur] = (acc[cur] || 0) + (Number(r.final_amount) || 0);
+      acc[cur] = (acc[cur] || 0) + (Number(r[key]) || 0);
       return acc;
     }, {});
-    const totalRevenue    = subRevenue + parkingRevenue + servicesRevenue;
-    const totalExpenses   = sum(expResult.data     || [], 'amount');
-    const netProfit       = totalRevenue - totalExpenses;
+
+    const subRevenueByCurrency      = byCur(paidInvResult.data || [], 'final_amount');
+    const parkingRevenueByCurrency  = byCur(parkResult.data    || [], 'amount');
+    const servicesRevenueByCurrency = byCur(svcResult.data     || [], 'final_amount');
+    const expensesByCurrency        = byCur(expResult.data     || [], 'amount');
+
+    const allCurs = new Set([
+      ...Object.keys(subRevenueByCurrency),
+      ...Object.keys(parkingRevenueByCurrency),
+      ...Object.keys(servicesRevenueByCurrency),
+      ...Object.keys(expensesByCurrency)
+    ]);
+    const totalRevenueByCurrency = {}, netProfitByCurrency = {};
+    for (const cur of allCurs) {
+      totalRevenueByCurrency[cur] = (subRevenueByCurrency[cur] || 0) + (parkingRevenueByCurrency[cur] || 0) + (servicesRevenueByCurrency[cur] || 0);
+      netProfitByCurrency[cur]    = totalRevenueByCurrency[cur] - (expensesByCurrency[cur] || 0);
+    }
 
     const activeClients    = (activeVehicleResult.data || []).length;
     const unpaidClients    = (unpaidInvResult.data || []).length;
@@ -76,7 +86,7 @@ router.get('/', authenticate, async (req, res) => {
     const thirdPartyParked = (thirdPartyResult.data || []).length;
 
     res.json({
-      stats: { totalRevenue, subRevenue, parkingRevenue, servicesRevenue, servicesRevenueByCurrency, totalExpenses, netProfit, activeClients, unpaidClients, currentlyParked, thirdPartyParked }
+      stats: { totalRevenueByCurrency, subRevenueByCurrency, parkingRevenueByCurrency, servicesRevenueByCurrency, expensesByCurrency, netProfitByCurrency, activeClients, unpaidClients, currentlyParked, thirdPartyParked }
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

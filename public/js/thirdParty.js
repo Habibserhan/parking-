@@ -12,17 +12,22 @@ const ThirdPartyPage = {
       <div class="page-header">
         <div class="page-title"><h2>Third Party</h2><p>Monthly billing per company</p></div>
         <div class="page-actions" style="flex-wrap:wrap;gap:8px">
+          <input type="text" id="tp-search" class="search-input" placeholder="Search for vehicle…" style="height:38px">
           <label style="font-size:13px;color:var(--text-muted);white-space:nowrap;line-height:38px">From</label>
           <input type="date" id="tp-from" value="${new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0,10)}" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;height:38px">
           <label style="font-size:13px;color:var(--text-muted);white-space:nowrap;line-height:38px">To</label>
           <input type="date" id="tp-to" value="${today()}" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;height:38px">
-          <button class="btn btn-primary" onclick="ThirdPartyPage.loadData()"><i class="fas fa-search"></i> Load</button>
         </div>
       </div>
       <div id="tp-content"><div class="loading"><div class="spinner"></div> Loading…</div></div>`;
   },
 
-  async init() { this.loadData(); },
+  async init() {
+    this.loadData();
+    document.getElementById('tp-search').addEventListener('input', () => this.loadData());
+    document.getElementById('tp-from').addEventListener('change', () => this.loadData());
+    document.getElementById('tp-to').addEventListener('change',   () => this.loadData());
+  },
 
   _getCompanies() {
     try {
@@ -35,7 +40,9 @@ const ThirdPartyPage = {
     const from = document.getElementById('tp-from')?.value || (currentMonth() + '-01');
     const to   = document.getElementById('tp-to')?.value   || today();
     try {
+      const search = document.getElementById('tp-search')?.value;
       const params = new URLSearchParams({ date_from: from, date_to: to, is_third_party: 'true' });
+      if (search) params.set('search', search);
       this.data = await API.get(`/daily-parking?${params}`);
       this.renderContent(from, to);
     } catch (e) {
@@ -70,7 +77,7 @@ const ThirdPartyPage = {
           <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:${vehicles.length ? '20px' : '0'}">
             <div class="stat-card"><div class="stat-icon blue"><i class="fas fa-car"></i></div><div class="stat-info"><div class="stat-label">Unique Vehicles</div><div class="stat-value">${vehicles.length}</div></div></div>
             <div class="stat-card"><div class="stat-icon purple"><i class="fas fa-calendar-check"></i></div><div class="stat-info"><div class="stat-label">Sessions</div><div class="stat-value">${rows.length}</div></div></div>
-            <div class="stat-card"><div class="stat-icon green"><i class="fas fa-dollar-sign"></i></div><div class="stat-info"><div class="stat-label">Amount Due</div><div class="stat-value" style="font-size:16px;word-break:break-word">${fmtRaw(total, company.currency)}</div></div></div>
+            <div class="stat-card"><div class="stat-icon green"><i class="fas ${company.currency === 'LBP' ? 'fa-money-bill-wave' : 'fa-dollar-sign'}"></i></div><div class="stat-info"><div class="stat-label">Amount Due (${company.currency === 'LBP' ? 'LL' : '$'})</div><div class="stat-value" style="font-size:16px;word-break:break-word">${fmtRaw(total, company.currency)}</div></div></div>
           </div>
           ${vehicles.length ? `<table>
             <thead><tr><th>#</th><th>Plate</th><th>Vehicle</th><th>Sessions</th><th>Rate / Month</th><th>Amount</th></tr></thead>
