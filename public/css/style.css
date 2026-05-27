@@ -660,20 +660,24 @@ tbody td.actions { white-space: nowrap; }
 /* ======== TOAST ======== */
 #toast-container {
   position: fixed;
-  bottom: 24px; right: 24px;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
   z-index: 2000;
   display: flex; flex-direction: column; gap: 8px;
+  align-items: center;
+  pointer-events: none;
 }
 .toast {
   background: #1e293b; color: #fff;
-  padding: 12px 18px; border-radius: 10px;
-  font-size: 13.5px; font-weight: 500;
-  min-width: 250px; max-width: 380px;
+  padding: 14px 24px; border-radius: 12px;
+  font-size: 14px; font-weight: 500;
+  min-width: 260px; max-width: 400px;
   display: flex; align-items: center; gap: 10px;
-  box-shadow: var(--shadow-lg);
-  animation: slideInRight .25s ease;
+  box-shadow: 0 8px 32px rgba(0,0,0,.25);
+  animation: toastPop .25s ease;
+  pointer-events: auto;
 }
-@keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes toastPop { from { transform: scale(.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .toast.success { background: #15803d; }
 .toast.error   { background: #dc2626; }
 .toast.warning { background: #d97706; }
@@ -813,9 +817,9 @@ tbody td.actions { white-space: nowrap; }
   /* Action buttons in tables */
   td.actions { display: flex; gap: 4px; flex-wrap: wrap; }
 
-  /* Toast — full width bottom */
-  #toast-container { bottom: 12px; right: 12px; left: 12px; }
-  .toast { min-width: unset; max-width: 100%; }
+  /* Toast — centered on mobile too */
+  #toast-container { top: 50%; left: 50%; transform: translate(-50%, -50%); right: unset; bottom: unset; width: 90%; }
+  .toast { min-width: unset; max-width: 100%; width: 100%; }
 
   /* Charts */
   .charts-grid { grid-template-columns: 1fr; }

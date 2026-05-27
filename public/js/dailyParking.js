@@ -31,10 +31,9 @@ const DailyParkingPage = {
 
       <div class="filters-bar">
         <input type="text" class="search-input" id="dp-search" placeholder="Search plate number…">
-        <input type="date" id="dp-from" value="${today()}">
-        <input type="date" id="dp-to"   value="${today()}">
-        <button class="btn btn-outline" onclick="DailyParkingPage.applyFilter()"><i class="fas fa-search"></i> Filter</button>
-        <button class="btn btn-outline" onclick="DailyParkingPage.clearFilter()">Clear</button>
+        <input type="datetime-local" id="dp-from">
+        <input type="datetime-local" id="dp-to">
+        <button class="btn btn-outline" onclick="DailyParkingPage.clearFilter()"><i class="fas fa-times"></i> Clear Filter</button>
       </div>
 
       <!-- Check In Tab -->
@@ -66,6 +65,8 @@ const DailyParkingPage = {
 
   init() {
     document.getElementById('dp-search').addEventListener('keypress', e => { if (e.key === 'Enter') this.applyFilter(); });
+    document.getElementById('dp-from').addEventListener('change', () => this.applyFilter());
+    document.getElementById('dp-to').addEventListener('change', () => this.applyFilter());
   },
 
   switchTab(tab) {
@@ -270,8 +271,8 @@ const DailyParkingPage = {
 
   clearFilter() {
     document.getElementById('dp-search').value = '';
-    document.getElementById('dp-from').value   = today();
-    document.getElementById('dp-to').value     = today();
+    document.getElementById('dp-from').value   = '';
+    document.getElementById('dp-to').value     = '';
     Router.navigate('daily-parking');
   },
 
