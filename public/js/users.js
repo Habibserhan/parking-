@@ -346,8 +346,9 @@ const UsersPage = {
         <td>${statusBadge(u.is_active ? 'active' : 'expired')}</td>
         <td class="text-muted">${fmtDate(u.created_at)}</td>
         <td class="actions">
-          <button class="btn btn-sm btn-outline btn-icon" onclick="UsersPage.showEditUser(${u.id})"><i class="fas fa-edit"></i></button>
-          ${u.id !== Auth.user?.id ? `<button class="btn btn-sm btn-outline btn-icon" onclick="UsersPage.deleteUser(${u.id})"><i class="fas fa-trash"></i></button>` : ''}
+          <button class="btn btn-sm btn-outline btn-icon" onclick="UsersPage.showEditUser(${u.id})" title="Edit"><i class="fas fa-edit"></i></button>
+          ${u.role !== 'admin' ? `<button class="btn btn-sm btn-outline btn-icon" onclick="UsersPage.showPermissions(${u.id})" title="Security Role" style="color:var(--primary)"><i class="fas fa-shield-alt"></i></button>` : ''}
+          ${u.id !== Auth.user?.id ? `<button class="btn btn-sm btn-outline btn-icon" onclick="UsersPage.deleteUser(${u.id})" title="Delete"><i class="fas fa-trash"></i></button>` : ''}
         </td>
       </tr>`).join('')}</tbody>
     </table>`;
@@ -403,6 +404,46 @@ const UsersPage = {
     const nameEl = document.getElementById('sidebar-business-name');
     if (nameEl) nameEl.textContent = data.business_name || 'My Parking';
     Toast.success('Settings saved');
+  },
+
+  showPermissions(id) {
+    const u = this.data.find(x => x.id === id);
+    if (!u) return;
+    const pages = [
+      { key: 'dashboard',     label: 'Dashboard',              icon: 'fa-tachometer-alt' },
+      { key: 'clients',       label: 'Clients',                icon: 'fa-users' },
+      { key: 'plans',         label: 'Subscription Plans',     icon: 'fa-tags' },
+      { key: 'daily-parking', label: 'Daily Parking',          icon: 'fa-car' },
+      { key: 'third-party',   label: 'Third Party',            icon: 'fa-building' },
+      { key: 'services',      label: 'Services',               icon: 'fa-shower' },
+      { key: 'transactions',  label: 'Daily Services',         icon: 'fa-soap' },
+      { key: 'expenses',      label: 'Expenses',               icon: 'fa-receipt' },
+      { key: 'invoices',      label: 'Invoices',               icon: 'fa-file-invoice-dollar' },
+      { key: 'unpaid',        label: 'Unpaid Subscriptions',   icon: 'fa-exclamation-circle' },
+      { key: 'reports',       label: 'Reports',                icon: 'fa-chart-bar' },
+    ];
+    const current = Array.isArray(u.page_permissions) ? u.page_permissions : pages.map(p => p.key);
+    Modal.show({ title: `Security Role — ${u.name}`, size: 'sm', body: `
+      <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px">Toggle which pages this employee can access.</p>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${pages.map(p => `
+          <label style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);cursor:pointer">
+            <div style="display:flex;align-items:center;gap:10px">
+              <i class="fas ${p.icon}" style="width:16px;color:var(--primary)"></i>
+              <span style="font-weight:500;font-size:13px">${escHtml(p.label)}</span>
+            </div>
+            <input type="checkbox" class="perm-toggle" data-key="${p.key}" ${current.includes(p.key) ? 'checked' : ''}
+              style="width:18px;height:18px;accent-color:var(--primary);cursor:pointer">
+          </label>`).join('')}
+      </div>`, saveLabel: 'Save Permissions', onSave: async () => {
+      const selected = [...document.querySelectorAll('.perm-toggle:checked')].map(el => el.dataset.key);
+      await API.put(`/users/${id}/permissions`, { page_permissions: selected });
+      const idx = this.data.findIndex(x => x.id === id);
+      if (idx !== -1) this.data[idx].page_permissions = selected;
+      Modal.close();
+      Toast.success('Permissions saved');
+      document.getElementById('users-table').innerHTML = this.renderTable(this.data);
+    }});
   },
 
   async deleteUser(id) {

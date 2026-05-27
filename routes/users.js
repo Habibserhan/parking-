@@ -6,8 +6,8 @@ const { authenticate, adminOnly } = require('../middleware/auth');
 
 router.get('/', authenticate, adminOnly, async (req, res) => {
   try {
-    const { data } = await sb.from('users').select('id, name, email, role, is_active, created_at').order('name');
-    res.json(data || []);
+    const { data } = await sb.from('users').select('id, name, email, role, is_active, created_at, page_permissions').order('name');
+    res.json((data || []).map(u => ({ ...u, page_permissions: u.page_permissions ? JSON.parse(u.page_permissions) : null })));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -32,6 +32,14 @@ router.put('/:id', authenticate, adminOnly, async (req, res) => {
     if (password) updates.password = bcrypt.hashSync(password, 10);
     await sb.from('users').update(updates).eq('id', req.params.id);
     res.json({ message: 'User updated' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.put('/:id/permissions', authenticate, adminOnly, async (req, res) => {
+  try {
+    const { page_permissions } = req.body;
+    await sb.from('users').update({ page_permissions: JSON.stringify(page_permissions) }).eq('id', req.params.id);
+    res.json({ message: 'Permissions updated' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

@@ -408,9 +408,20 @@ function renderUserInfo() {
   if (nm) nm.textContent = u.name;
   if (rl) rl.textContent = u.role;
 
-  // Hide admin-only nav items
+  // Hide admin-only nav items for non-admins
   if (!Auth.isAdmin()) {
     document.querySelectorAll('[data-admin]').forEach(el => el.style.display = 'none');
+  }
+
+  // Apply per-user page permissions (employees only)
+  if (!Auth.isAdmin()) {
+    const perms = Auth.user?.page_permissions;
+    if (Array.isArray(perms)) {
+      document.querySelectorAll('.nav-item[data-page]').forEach(el => {
+        const page = el.dataset.page;
+        if (!perms.includes(page)) el.style.display = 'none';
+      });
+    }
   }
 }
 

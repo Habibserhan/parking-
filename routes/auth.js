@@ -20,7 +20,8 @@ router.post('/login', async (req, res) => {
       JWT_SECRET,
       { expiresIn: '24h' }
     );
-    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+    const permissions = user.page_permissions ? JSON.parse(user.page_permissions) : null;
+    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, page_permissions: permissions } });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -28,8 +29,9 @@ router.post('/login', async (req, res) => {
 
 router.get('/me', authenticate, async (req, res) => {
   try {
-    const { data: user } = await sb.from('users').select('id, name, email, role').eq('id', req.user.id).maybeSingle();
-    res.json(user);
+    const { data: user } = await sb.from('users').select('id, name, email, role, page_permissions').eq('id', req.user.id).maybeSingle();
+    const permissions = user?.page_permissions ? JSON.parse(user.page_permissions) : null;
+    res.json({ ...user, page_permissions: permissions });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
