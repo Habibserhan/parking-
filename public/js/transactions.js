@@ -36,7 +36,6 @@ const TransactionsPage = {
         <select id="tx-status">
           <option value="">All Status</option><option value="paid">Paid</option><option value="unpaid">Unpaid</option>
         </select>
-        <button class="btn btn-outline" onclick="TransactionsPage.applyFilter()"><i class="fas fa-search"></i> Filter</button>
       </div>
       <div class="card">
         <div class="table-wrap" id="tx-table">${this.renderTable(this.data)}</div>
@@ -45,6 +44,11 @@ const TransactionsPage = {
 
   init() {
     document.getElementById('tx-search').addEventListener('keypress', e => { if (e.key === 'Enter') this.applyFilter(); });
+    document.getElementById('tx-from').addEventListener('change', () => this.applyFilter());
+    document.getElementById('tx-to').addEventListener('change', () => this.applyFilter());
+    document.getElementById('tx-status').addEventListener('change', () => this.applyFilter());
+    document.getElementById('tx-vehicle').addEventListener('change', () => this.applyFilter());
+    document.getElementById('tx-service').addEventListener('change', () => this.applyFilter());
   },
 
   renderTable(rows) {
@@ -74,17 +78,6 @@ const TransactionsPage = {
     const clientOpts = this.clients.map(c => `<option value="${c.id}" ${t.client_id==c.id?'selected':''}>${escHtml(c.full_name)} ${c.mobile?'('+c.mobile+')':''}</option>`).join('');
     return `<form id="modal-form"><div class="form-row cols-2">
       <div class="form-group"><label>Service Date</label><input name="service_date" type="date" value="${t.service_date || today()}"></div>
-      <div class="form-group"><label>Client Type</label>
-        <select name="client_type" id="tx-client-type" onchange="TransactionsPage.toggleClientFields()">
-          <option value="non-registered" ${t.client_type!=='registered'?'selected':''}>Walk-in / Non-registered</option>
-          <option value="registered" ${t.client_type==='registered'?'selected':''}>Registered Client</option>
-        </select>
-      </div>
-      <div id="tx-reg-field" style="${t.client_type==='registered'?'':'display:none'};grid-column:1/-1">
-        <div class="form-group"><label>Select Client</label>
-          <select name="client_id"><option value="">— Select —</option>${clientOpts}</select>
-        </div>
-      </div>
       <div class="form-group"><label>Client Name</label><input name="client_name" value="${escHtml(t.client_name || '')}" placeholder="Optional"></div>
       <div class="form-group"><label>Mobile</label><input name="mobile" value="${escHtml(t.mobile || '')}" placeholder="Optional"></div>
       <div class="form-group"><label>Plate Number</label><input name="plate_number" value="${escHtml(t.plate_number || '')}" placeholder="ABC 1234"></div>
@@ -94,20 +87,12 @@ const TransactionsPage = {
       <div class="form-group" style="grid-column:1/-1"><label>Service</label>
         <select name="service_id" id="tx-service-sel" onchange="TransactionsPage.fillPrice()">${svcOpts}</select>
       </div>
-      <div class="form-group"><label>Price</label><input name="price" type="number" step="0.01" id="tx-price" value="${t.price || 0}" oninput="TransactionsPage.calcTotal()"></div>
-      <div class="form-group"><label>Discount</label><input name="discount" type="number" step="0.01" min="0" value="${t.discount || 0}" oninput="TransactionsPage.calcTotal()"></div>
-      <div class="form-group"><label>Final Amount</label><input name="final_amount" type="number" step="0.01" id="tx-final" value="${t.final_amount || 0}" readonly style="background:#f8fafc"></div>
+      <div class="form-group"><label>Price</label><input name="price" type="number" step="0.01" id="tx-price" value="${t.price || 0}"></div>
       <div class="form-group"><label>Currency</label>${currencySelect('currency', t.currency)}</div>
       <div class="form-group"><label>Payment Status</label>
         <select name="payment_status"><option value="paid" ${t.payment_status==='paid'?'selected':''}>Paid</option><option value="unpaid" ${t.payment_status!=='paid'?'selected':''}>Unpaid</option></select>
       </div>
-      <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea name="notes">${escHtml(t.notes || '')}</textarea></div>
     </div></form>`;
-  },
-
-  toggleClientFields() {
-    const type = document.getElementById('tx-client-type').value;
-    document.getElementById('tx-reg-field').style.display = type === 'registered' ? '' : 'none';
   },
 
   fillPrice() {
@@ -115,21 +100,13 @@ const TransactionsPage = {
     const opt = sel.options[sel.selectedIndex];
     if (opt && opt.dataset.price) {
       document.getElementById('tx-price').value = opt.dataset.price;
-      this.calcTotal();
     }
-  },
-
-  calcTotal() {
-    const price    = Number(document.getElementById('tx-price')?.value) || 0;
-    const discount = Number(document.querySelector('[name=discount]')?.value) || 0;
-    const finalEl  = document.getElementById('tx-final');
-    if (finalEl) finalEl.value = Math.max(0, price - discount).toFixed(2);
   },
 
   showAdd() {
     Modal.show({ title: 'New Service Transaction', size: 'lg', body: this._formHtml(), onSave: async () => {
       const data = Modal.getFormData();
-      await API.post('/transactions', { ...data, price: Number(data.price), discount: Number(data.discount), final_amount: Number(data.price) - Number(data.discount) });
+      await API.post('/transactions', { ...data, price: Number(data.price), discount: 0, final_amount: Number(data.price) });
       Modal.close(); Toast.success('Service recorded'); this.applyFilter();
     }});
     setTimeout(() => this.fillPrice(), 50);
@@ -139,10 +116,10 @@ const TransactionsPage = {
     const t = this.data.find(x => x.id === id);
     Modal.show({ title: 'Edit Transaction', size: 'lg', body: this._formHtml(t), onSave: async () => {
       const data = Modal.getFormData();
-      await API.put(`/transactions/${id}`, { ...data, price: Number(data.price), discount: Number(data.discount) });
+      await API.put(`/transactions/${id}`, { ...data, price: Number(data.price), discount: 0, final_amount: Number(data.price) });
       Modal.close(); Toast.success('Updated'); this.applyFilter();
     }});
-    setTimeout(() => this.calcTotal(), 50);
+    setTimeout(() => this.fillPrice(), 50);
   },
 
   async applyFilter() {
