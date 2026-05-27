@@ -211,7 +211,7 @@ const UsersPage = {
       <thead><tr><th>Company Name</th><th>Rate / Vehicle / Month</th><th>Currency</th><th>Actions</th></tr></thead>
       <tbody>${companies.map(c => `<tr>
         <td><strong>${escHtml(c.name)}</strong></td>
-        <td>${fmtAmt(c.rate, c.currency)}</td>
+        <td>${fmtRaw(c.rate, c.currency)}</td>
         <td><span class="badge badge-gray">${escHtml(c.currency)}</span></td>
         <td class="actions">
           <button class="btn btn-sm btn-outline btn-icon" onclick="UsersPage.showEditThirdPartyModal('${escHtml(c.name)}')" title="Edit"><i class="fas fa-edit"></i></button>

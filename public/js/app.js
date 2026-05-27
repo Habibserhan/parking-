@@ -248,6 +248,19 @@ function fmtAmt(amount, currency) {
   }).format(n);
 }
 
+// Format a raw amount in a given currency WITHOUT applying the stored multiplier.
+// Use for values already stored in their natural unit (e.g. company flat rates).
+function fmtRaw(amount, currency) {
+  const cur = currency || 'USD';
+  const map = _getCurrencyMap();
+  const cfg = map[cur] || CURRENCIES[cur] || { symbol: cur, dec: 2 };
+  const n = Number(amount) || 0;
+  return cfg.symbol + ' ' + new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: cfg.dec ?? 2,
+    maximumFractionDigits: cfg.dec ?? 2
+  }).format(n);
+}
+
 // Build <select> for per-record currency using the active currency list
 function currencySelect(name, selected) {
   const sel = selected || 'USD';

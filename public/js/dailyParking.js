@@ -4,6 +4,7 @@
 const DailyParkingPage = {
   title: 'Daily Parking',
   data: [],
+  activeTab: 'checkin',
 
   async render() {
     this.data = await API.get('/daily-parking');
@@ -12,9 +13,20 @@ const DailyParkingPage = {
     return `
       <div class="page-header">
         <div class="page-title"><h2>Daily Parking</h2><p>Manage non-subscription vehicle check-ins</p></div>
-        <div class="page-actions">
-          <button class="btn btn-primary" onclick="DailyParkingPage.showCheckIn()"><i class="fas fa-car"></i> Check In</button>
+        <div class="page-actions" id="dp-header-actions">
+          ${this.activeTab === 'checkin' ? `<button class="btn btn-primary" onclick="DailyParkingPage.showCheckIn()"><i class="fas fa-car"></i> Check In</button>` : ''}
         </div>
+      </div>
+
+      <div class="page-tabs">
+        <button class="page-tab-btn ${this.activeTab === 'checkin' ? 'active' : ''}" onclick="DailyParkingPage.switchTab('checkin')">
+          <i class="fas fa-sign-in-alt"></i> Check In
+          <span class="page-tab-badge">${parked.length}</span>
+        </button>
+        <button class="page-tab-btn ${this.activeTab === 'checkout' ? 'active' : ''}" onclick="DailyParkingPage.switchTab('checkout')">
+          <i class="fas fa-sign-out-alt"></i> Check Out
+          <span class="page-tab-badge">${parked.length}</span>
+        </button>
       </div>
 
       <div class="filters-bar">
@@ -25,20 +37,30 @@ const DailyParkingPage = {
         <button class="btn btn-outline" onclick="DailyParkingPage.clearFilter()">Clear</button>
       </div>
 
-      <!-- Currently Parked -->
-      <div class="card" style="margin-bottom:16px">
-        <div class="card-header">
-          <span class="card-title"><i class="fas fa-car text-info" style="margin-right:8px"></i> Currently Parked (${parked.length})</span>
+      <!-- Check In Tab -->
+      <div id="dp-tab-checkin" style="${this.activeTab === 'checkin' ? '' : 'display:none'}">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title"><i class="fas fa-car text-info" style="margin-right:8px"></i> Currently Parked (${parked.length})</span>
+          </div>
+          <div class="table-wrap" id="parked-table">${this.renderParked(parked)}</div>
         </div>
-        <div class="table-wrap" id="parked-table">${this.renderParked(parked)}</div>
       </div>
 
-      <!-- Completed -->
-      <div class="card">
-        <div class="card-header">
-          <span class="card-title"><i class="fas fa-check-circle text-success" style="margin-right:8px"></i> Completed Records</span>
+      <!-- Check Out Tab -->
+      <div id="dp-tab-checkout" style="${this.activeTab === 'checkout' ? '' : 'display:none'}">
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header">
+            <span class="card-title"><i class="fas fa-sign-out-alt" style="color:var(--warning);margin-right:8px"></i> Pending Check Out (${parked.length})</span>
+          </div>
+          <div class="table-wrap" id="pending-checkout-table">${this.renderPendingCheckout(parked)}</div>
         </div>
-        <div class="table-wrap" id="completed-table">${this.renderCompleted(completed)}</div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title"><i class="fas fa-check-circle text-success" style="margin-right:8px"></i> Completed Records</span>
+          </div>
+          <div class="table-wrap" id="completed-table">${this.renderCompleted(completed)}</div>
+        </div>
       </div>`;
   },
 
@@ -46,8 +68,41 @@ const DailyParkingPage = {
     document.getElementById('dp-search').addEventListener('keypress', e => { if (e.key === 'Enter') this.applyFilter(); });
   },
 
+  switchTab(tab) {
+    this.activeTab = tab;
+    document.querySelectorAll('.page-tab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('onclick').includes(`'${tab}'`));
+    });
+    document.getElementById('dp-tab-checkin').style.display  = tab === 'checkin'  ? '' : 'none';
+    document.getElementById('dp-tab-checkout').style.display = tab === 'checkout' ? '' : 'none';
+    const actions = document.getElementById('dp-header-actions');
+    if (actions) actions.innerHTML = tab === 'checkin'
+      ? `<button class="btn btn-primary" onclick="DailyParkingPage.showCheckIn()"><i class="fas fa-car"></i> Check In</button>`
+      : '';
+  },
+
+  // Check In tab: currently parked — edit/delete only
   renderParked(rows) {
     if (!rows.length) return `<div class="empty-state" style="padding:30px"><i class="fas fa-parking"></i><h4>No vehicles parked</h4><p>Currently the lot is empty.</p></div>`;
+    return `<table>
+      <thead><tr><th>Plate</th><th>Vehicle</th><th>Entry Time</th><th>Duration</th><th>Notes</th><th>Actions</th></tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td><strong>${escHtml(r.plate_number)}</strong>${r.third_party_company ? ` <span class="badge badge-purple" style="font-size:10px">${escHtml(r.third_party_company)}</span>` : ''}</td>
+        <td>${vehicleBadge(r.vehicle_type)}</td>
+        <td>${fmtDateTime(r.entry_time)}</td>
+        <td class="text-muted">${this.liveDuration(r.entry_time)}</td>
+        <td class="text-muted">${escHtml(r.notes || '—')}</td>
+        <td class="actions">
+          <button class="btn btn-sm btn-outline btn-icon" onclick="DailyParkingPage.showEdit(${r.id})" title="Edit"><i class="fas fa-edit"></i></button>
+          <button class="btn btn-sm btn-outline btn-icon" onclick="DailyParkingPage.deleteRecord(${r.id})" title="Delete"><i class="fas fa-trash"></i></button>
+        </td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+  },
+
+  // Check Out tab: currently parked — with checkout button
+  renderPendingCheckout(rows) {
+    if (!rows.length) return `<div class="empty-state" style="padding:30px"><i class="fas fa-sign-out-alt"></i><h4>No vehicles pending checkout</h4><p>All vehicles have been checked out.</p></div>`;
     return `<table>
       <thead><tr><th>Plate</th><th>Vehicle</th><th>Entry Time</th><th>Duration</th><th>Notes</th><th>Actions</th></tr></thead>
       <tbody>${rows.map(r => `<tr>
@@ -117,7 +172,6 @@ const DailyParkingPage = {
     const record = this.data.find(r => r.id === id);
     const mins = Math.round((Date.now() - new Date(record?.entry_time)) / 60000);
 
-    // Third party: use flat monthly company rate
     let autoCurrency, multiplier, inputAmount, calcNote;
     if (record?.third_party_company) {
       try {
@@ -126,8 +180,8 @@ const DailyParkingPage = {
         if (company) {
           autoCurrency = company.currency || 'USD';
           multiplier = (_getCurrencyMap()[autoCurrency] || {}).multiplier || 1;
-          inputAmount = Math.round(Number(company.rate) * multiplier);
-          calcNote = `<div style="margin-top:6px;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--text-muted)"><i class="fas fa-building" style="margin-right:4px"></i>${escHtml(company.name)} — ${fmtAmt(company.rate, autoCurrency)} / month (flat rate)</div>`;
+          inputAmount = Number(company.rate);
+          calcNote = `<div style="margin-top:6px;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--text-muted)"><i class="fas fa-building" style="margin-right:4px"></i>${escHtml(company.name)} — ${fmtRaw(company.rate, autoCurrency)} / month (flat rate)</div>`;
         } else {
           autoCurrency = 'USD'; multiplier = 1; inputAmount = 0;
           calcNote = `<div style="margin-top:6px;font-size:12px;color:var(--text-muted)">Third party company not found — enter manually</div>`;
@@ -137,7 +191,6 @@ const DailyParkingPage = {
         calcNote = `<div style="margin-top:6px;font-size:12px;color:var(--text-muted)">Enter amount manually</div>`;
       }
     } else {
-      // Hourly rate calculation
       const calc = calcParkingAmount(record?.vehicle_type, mins);
       autoCurrency = calc ? calc.currency : 'USD';
       multiplier = (_getCurrencyMap()[autoCurrency] || {}).multiplier || 1;
@@ -209,8 +262,9 @@ const DailyParkingPage = {
     this.data = await API.get(`/daily-parking?${params}`);
     const parked    = this.data.filter(d => d.parking_status === 'parked');
     const completed = this.data.filter(d => d.parking_status === 'completed');
-    document.getElementById('parked-table').innerHTML    = this.renderParked(parked);
-    document.getElementById('completed-table').innerHTML = this.renderCompleted(completed);
+    document.getElementById('parked-table').innerHTML           = this.renderParked(parked);
+    document.getElementById('pending-checkout-table').innerHTML = this.renderPendingCheckout(parked);
+    document.getElementById('completed-table').innerHTML        = this.renderCompleted(completed);
   },
 
   clearFilter() {

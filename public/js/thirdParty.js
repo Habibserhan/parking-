@@ -70,7 +70,7 @@ const ThirdPartyPage = {
           <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:${vehicles.length ? '20px' : '0'}">
             <div class="stat-card"><div class="stat-icon blue"><i class="fas fa-car"></i></div><div class="stat-info"><div class="stat-label">Unique Vehicles</div><div class="stat-value">${vehicles.length}</div></div></div>
             <div class="stat-card"><div class="stat-icon purple"><i class="fas fa-calendar-check"></i></div><div class="stat-info"><div class="stat-label">Sessions</div><div class="stat-value">${rows.length}</div></div></div>
-            <div class="stat-card"><div class="stat-icon green"><i class="fas fa-dollar-sign"></i></div><div class="stat-info"><div class="stat-label">Amount Due</div><div class="stat-value" style="font-size:16px;word-break:break-word">${fmtAmt(total, company.currency)}</div></div></div>
+            <div class="stat-card"><div class="stat-icon green"><i class="fas fa-dollar-sign"></i></div><div class="stat-info"><div class="stat-label">Amount Due</div><div class="stat-value" style="font-size:16px;word-break:break-word">${fmtRaw(total, company.currency)}</div></div></div>
           </div>
           ${vehicles.length ? `<table>
             <thead><tr><th>#</th><th>Plate</th><th>Vehicle</th><th>Sessions</th><th>Rate / Month</th><th>Amount</th></tr></thead>
@@ -79,12 +79,12 @@ const ThirdPartyPage = {
               <td><strong>${escHtml(v.plate)}</strong></td>
               <td>${vehicleBadge(v.type)}</td>
               <td class="text-muted">${v.sessions}</td>
-              <td>${fmtAmt(rate, company.currency)}</td>
-              <td class="fw-bold">${fmtAmt(rate, company.currency)}</td>
+              <td>${fmtRaw(rate, company.currency)}</td>
+              <td class="fw-bold">${fmtRaw(rate, company.currency)}</td>
             </tr>`).join('')}</tbody>
             <tfoot><tr style="background:var(--bg)">
               <td colspan="5" style="text-align:right;padding:12px 16px;font-weight:700">Total — ${vehicles.length} vehicle${vehicles.length !== 1 ? 's' : ''}</td>
-              <td style="padding:12px 16px;font-weight:700">${fmtAmt(total, company.currency)}</td>
+              <td style="padding:12px 16px;font-weight:700">${fmtRaw(total, company.currency)}</td>
             </tr></tfoot>
           </table>` : `<div class="empty-state" style="padding:20px"><i class="fas fa-car"></i><p>No vehicles for this company this month.</p></div>`}
         </div>
