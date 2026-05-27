@@ -5,27 +5,13 @@ const { authenticate } = require('../middleware/auth');
 
 function sum(arr, key) { return arr.reduce((s, r) => s + (Number(r[key]) || 0), 0); }
 
-function getMonthBounds(month) {
-  const [year, mon] = month.split('-').map(Number);
-  const lastDay = new Date(year, mon, 0).getDate();
-  return {
-    start: `${month}-01`,
-    end:   `${month}-${String(lastDay).padStart(2, '0')}`
-  };
-}
-
-function twelveMonthsAgoStr() {
-  const d = new Date();
-  d.setMonth(d.getMonth() - 11);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
 
 router.get('/', authenticate, async (req, res) => {
   try {
-    const month = req.query.month || new Date().toISOString().slice(0, 7);
-    const { start: monthStart, end: monthEnd } = getMonthBounds(month);
-    const today = new Date().toISOString().slice(0, 10);
-    const oldestMonth = twelveMonthsAgoStr();
+    const date  = req.query.date  || new Date().toISOString().slice(0, 10);
+    const month = date.slice(0, 7);
+    const dayStart = `${date}T00:00:00`;
+    const dayEnd   = `${date}T23:59:59`;
 
     // Run all data fetches in parallel
     const [
@@ -35,34 +21,22 @@ router.get('/', authenticate, async (req, res) => {
       expResult,
       activeVehicleResult,
       paidThisMonthResult,
-      parkedResult,
-      revByMonthResult,
-      expByMonthResult,
-      parkByMonthResult,
-      svcByTypeResult
+      parkedResult
     ] = await Promise.all([
-      // Subscription revenue this month
+      // Subscription revenue this month (invoices are monthly)
       sb.from('invoices').select('final_amount').eq('invoice_month', month).eq('payment_status', 'paid'),
-      // Parking revenue this month
-      sb.from('daily_parking').select('amount').eq('payment_status', 'paid').gte('entry_time', `${monthStart}T00:00:00`).lte('entry_time', `${monthEnd}T23:59:59`),
-      // Service revenue this month
-      sb.from('service_transactions').select('final_amount').eq('payment_status', 'paid').gte('service_date', monthStart).lte('service_date', monthEnd),
-      // Expenses this month
-      sb.from('expenses').select('amount').gte('expense_date', monthStart).lte('expense_date', monthEnd),
+      // Parking revenue this day
+      sb.from('daily_parking').select('amount').eq('payment_status', 'paid').gte('entry_time', dayStart).lte('entry_time', dayEnd),
+      // Service revenue this day
+      sb.from('service_transactions').select('final_amount').eq('payment_status', 'paid').eq('service_date', date),
+      // Expenses this day
+      sb.from('expenses').select('amount').eq('expense_date', date),
       // Active vehicles (for count + unpaid calc)
       sb.from('client_vehicles').select('id').eq('status', 'active'),
       // Paid invoices this month (to calc unpaid)
       sb.from('invoices').select('vehicle_id').eq('invoice_month', month).eq('payment_status', 'paid'),
       // Currently parked
-      sb.from('daily_parking').select('id').eq('parking_status', 'parked'),
-      // Revenue chart: invoices last 12 months
-      sb.from('invoices').select('invoice_month, final_amount').eq('payment_status', 'paid').gte('invoice_month', oldestMonth),
-      // Expenses chart: last 12 months
-      sb.from('expenses').select('expense_date, amount').gte('expense_date', `${oldestMonth}-01`),
-      // Parking chart: last 12 months
-      sb.from('daily_parking').select('entry_time, amount').eq('payment_status', 'paid').gte('entry_time', `${oldestMonth}-01T00:00:00`),
-      // Services by type this month
-      sb.from('service_transactions').select('final_amount, services(name)').eq('payment_status', 'paid').gte('service_date', monthStart).lte('service_date', monthEnd).not('service_id', 'is', null)
+      sb.from('daily_parking').select('id').eq('parking_status', 'parked')
     ]);
 
     const subRevenue      = sum(paidInvResult.data || [], 'final_amount');
@@ -80,47 +54,77 @@ router.get('/', authenticate, async (req, res) => {
 
     const currentlyParked = (parkedResult.data || []).length;
 
-    // Revenue by month chart
-    const revMap = {};
-    (revByMonthResult.data || []).forEach(i => {
-      revMap[i.invoice_month] = (revMap[i.invoice_month] || 0) + Number(i.final_amount);
-    });
-    const revenueByMonth = Object.entries(revMap)
-      .map(([month, amount]) => ({ month, amount }))
-      .sort((a, b) => a.month.localeCompare(b.month));
-
-    // Expenses by month chart
-    const expMap = {};
-    (expByMonthResult.data || []).forEach(e => {
-      const m = (e.expense_date || '').slice(0, 7);
-      if (m) expMap[m] = (expMap[m] || 0) + Number(e.amount);
-    });
-    const expensesByMonth = Object.entries(expMap)
-      .map(([month, amount]) => ({ month, amount }))
-      .sort((a, b) => a.month.localeCompare(b.month));
-
-    // Parking by month chart
-    const parkMap = {};
-    (parkByMonthResult.data || []).forEach(p => {
-      const m = (p.entry_time || '').slice(0, 7);
-      if (m) parkMap[m] = (parkMap[m] || 0) + Number(p.amount);
-    });
-    const parkingByMonth = Object.entries(parkMap)
-      .map(([month, amount]) => ({ month, amount }))
-      .sort((a, b) => a.month.localeCompare(b.month));
-
-    // Services by type chart
-    const svcMap = {};
-    (svcByTypeResult.data || []).forEach(st => {
-      const name = st.services?.name || 'Unknown';
-      svcMap[name] = (svcMap[name] || 0) + Number(st.final_amount);
-    });
-    const servicesByType = Object.entries(svcMap).map(([name, amount]) => ({ name, amount }));
-
     res.json({
-      stats: { totalRevenue, subRevenue, parkingRevenue, servicesRevenue, totalExpenses, netProfit, activeClients, unpaidClients, currentlyParked },
-      charts: { revenueByMonth, expensesByMonth, parkingByMonth, servicesByType }
+      stats: { totalRevenue, subRevenue, parkingRevenue, servicesRevenue, totalExpenses, netProfit, activeClients, unpaidClients, currentlyParked }
     });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.get('/details', authenticate, async (req, res) => {
+  try {
+    const { type, date } = req.query;
+    const d = date || new Date().toISOString().slice(0, 10);
+    const month = d.slice(0, 7);
+    const dayStart = `${d}T00:00:00`;
+    const dayEnd   = `${d}T23:59:59`;
+
+    if (type === 'sub-revenue') {
+      const { data } = await sb.from('invoices')
+        .select('invoice_number, final_amount, currency, invoice_month, clients(full_name, mobile), client_vehicles(plate_number, vehicle_type), subscription_plans(name)')
+        .eq('invoice_month', month).eq('payment_status', 'paid').order('final_amount', { ascending: false });
+      return res.json(data || []);
+    }
+
+    if (type === 'parking-revenue') {
+      const { data } = await sb.from('daily_parking')
+        .select('plate_number, vehicle_type, entry_time, exit_time, duration_minutes, amount, currency, third_party_company')
+        .eq('payment_status', 'paid')
+        .gte('entry_time', dayStart).lte('entry_time', dayEnd)
+        .order('entry_time', { ascending: false });
+      return res.json(data || []);
+    }
+
+    if (type === 'services-revenue') {
+      const { data } = await sb.from('service_transactions')
+        .select('service_date, final_amount, currency, services(name), clients(full_name)')
+        .eq('payment_status', 'paid').eq('service_date', d)
+        .order('service_date', { ascending: false });
+      return res.json(data || []);
+    }
+
+    if (type === 'expenses') {
+      const { data } = await sb.from('expenses')
+        .select('title, expense_type, amount, currency, expense_date, paid_to, payment_method')
+        .eq('expense_date', d)
+        .order('expense_date', { ascending: false });
+      return res.json(data || []);
+    }
+
+    if (type === 'active-subscribers') {
+      const { data } = await sb.from('client_vehicles')
+        .select('plate_number, vehicle_type, amount, currency, clients(full_name, mobile), subscription_plans(name)')
+        .eq('status', 'active').order('plate_number');
+      return res.json(data || []);
+    }
+
+    if (type === 'unpaid-subscribers') {
+      const { data: vehicles } = await sb.from('client_vehicles')
+        .select('id, plate_number, vehicle_type, amount, currency, clients(full_name, mobile), subscription_plans(name)')
+        .eq('status', 'active');
+      const { data: paidInvs } = await sb.from('invoices')
+        .select('vehicle_id').eq('invoice_month', month).eq('payment_status', 'paid');
+      const paidSet = new Set((paidInvs || []).map(i => i.vehicle_id));
+      return res.json((vehicles || []).filter(v => !paidSet.has(v.id)));
+    }
+
+    if (type === 'currently-parked') {
+      const { data } = await sb.from('daily_parking')
+        .select('plate_number, vehicle_type, entry_time, notes, third_party_company')
+        .eq('parking_status', 'parked').order('entry_time', { ascending: false });
+      return res.json(data || []);
+    }
+
+    res.status(400).json({ error: 'Unknown type' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

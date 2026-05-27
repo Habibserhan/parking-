@@ -214,13 +214,14 @@ const DailyParkingPage = {
           <div class="form-group"><label>Payment Status</label>
             <select name="payment_status"><option value="paid">Paid</option><option value="unpaid">Unpaid</option></select>
           </div>
+          ${record?.third_party_company ? `<div class="form-group" style="grid-column:1/-1"><label><i class="fas fa-credit-card" style="color:var(--primary);margin-right:6px"></i>Card Number</label><input name="card_number" placeholder="Enter card number…" style="letter-spacing:1px"></div>` : ''}
         </div>
       </form>`, saveLabel: 'Check Out', onSave: async () => {
       if (!Modal.validate()) throw new Error('Amount is required');
       const data = Modal.getFormData();
       const saveCfg = _getCurrencyMap()[data.currency] || {};
       const saveMult = saveCfg.multiplier || 1;
-      await API.post(`/daily-parking/${id}/checkout`, { amount: Number(data.amount) / saveMult, payment_status: data.payment_status, currency: data.currency || 'USD' });
+      await API.post(`/daily-parking/${id}/checkout`, { amount: Number(data.amount) / saveMult, payment_status: data.payment_status, currency: data.currency || 'USD', card_number: data.card_number || null });
       Modal.close(); Toast.success('Vehicle checked out'); Router.navigate('daily-parking');
     }});
   },

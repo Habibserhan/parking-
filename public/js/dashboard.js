@@ -3,9 +3,9 @@
 // ============================================================
 const DashboardPage = {
   title: 'Dashboard',
-  _charts: [],
   _stats: null,
   _currency: 'USD',
+  _activeType: null,
 
   async render() {
     return `
@@ -13,8 +13,8 @@ const DashboardPage = {
         <div class="page-title"><h2>Dashboard</h2><p>Parking business overview</p></div>
         <div class="page-actions">
           <div class="month-selector">
-            <label>Month:</label>
-            <input type="month" id="dash-month" value="${currentMonth()}">
+            <label>Date:</label>
+            <input type="date" id="dash-month" value="${today()}">
           </div>
           <div style="display:flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;height:38px">
             <button id="btn-usd" onclick="DashboardPage.setCurrency('USD')"
@@ -32,17 +32,18 @@ const DashboardPage = {
   },
 
   async init() {
-    document.getElementById('dash-month').addEventListener('change', () => this.loadData());
+    document.getElementById('dash-month').addEventListener('change', () => { this._activeType = null; this.loadData(); });
     this.loadData();
   },
 
   async loadData() {
-    const month = document.getElementById('dash-month').value || currentMonth();
+    const date = document.getElementById('dash-month').value || today();
     try {
-      const d = await API.get(`/dashboard?month=${month}`);
+      const d = await API.get(`/dashboard?date=${date}`);
       this._stats = d.stats;
-      this.renderStats(d.stats);
-      this.renderCharts(d.charts);
+      document.getElementById('dash-content').innerHTML = `
+        <div class="stats-grid" id="stats-grid">${this._statCards(d.stats)}</div>
+        <div id="dash-detail-panel"></div>`;
     } catch (e) {
       document.getElementById('dash-content').innerHTML =
         `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h4>Failed to load</h4><p>${escHtml(e.message)}</p></div>`;
@@ -55,7 +56,7 @@ const DashboardPage = {
     const btnLbp = document.getElementById('btn-lbp');
     if (btnUsd) { btnUsd.style.background = cur === 'USD' ? 'var(--primary)' : 'transparent'; btnUsd.style.color = cur === 'USD' ? '#fff' : 'var(--text-muted)'; }
     if (btnLbp) { btnLbp.style.background = cur === 'LBP' ? 'var(--primary)' : 'transparent'; btnLbp.style.color = cur === 'LBP' ? '#fff' : 'var(--text-muted)'; }
-    if (this._stats) this._redrawStatCards();
+    if (this._stats) document.getElementById('stats-grid').innerHTML = this._statCards(this._stats);
   },
 
   _getLbpRate() {
@@ -70,44 +71,29 @@ const DashboardPage = {
   _fmtMoney(value) {
     if (this._currency === 'LBP') {
       const lbp = (Number(value) || 0) * this._getLbpRate();
-      return 'LL ' + new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(lbp);
+      return 'LL ' + new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(lbp);
     }
     return '$ ' + new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value) || 0);
   },
 
-  renderStats(s) {
-    document.getElementById('dash-content').innerHTML = `
-      <div class="stats-grid" id="stats-grid">${this._statCards(s)}</div>
-      <div class="charts-grid">
-        <div class="chart-card"><h4>Subscription Revenue — Last 12 Months</h4><div class="chart-wrap"><canvas id="ch-revenue"></canvas></div></div>
-        <div class="chart-card"><h4>Expenses — Last 12 Months</h4><div class="chart-wrap"><canvas id="ch-expenses"></canvas></div></div>
-        <div class="chart-card"><h4>Daily Parking Revenue — Last 12 Months</h4><div class="chart-wrap"><canvas id="ch-parking"></canvas></div></div>
-        <div class="chart-card"><h4>Services Revenue This Month</h4><div class="chart-wrap"><canvas id="ch-services"></canvas></div></div>
-      </div>`;
-  },
-
-  _redrawStatCards() {
-    const grid = document.getElementById('stats-grid');
-    if (grid) grid.innerHTML = this._statCards(this._stats);
-  },
-
   _statCards(s) {
     return `
-      ${this._card('fa-dollar-sign',        'blue',   'Total Revenue',        this._fmtMoney(s.totalRevenue),    'Paid invoices + parking + services')}
-      ${this._card('fa-file-invoice',       'purple', 'Subscription Revenue', this._fmtMoney(s.subRevenue),      'Paid invoices this month')}
-      ${this._card('fa-car',                'cyan',   'Parking Revenue',      this._fmtMoney(s.parkingRevenue),  'Daily parking income')}
-      ${this._card('fa-shower',             'info',   'Services Revenue',     this._fmtMoney(s.servicesRevenue), 'Wash & cleaning income')}
-      ${this._card('fa-receipt',            'amber',  'Total Expenses',       this._fmtMoney(s.totalExpenses),   'All expenses this month')}
-      ${this._card('fa-chart-line', s.netProfit >= 0 ? 'green' : 'red', 'Net Profit', this._fmtMoney(s.netProfit), 'Revenue minus expenses')}
-      ${this._card('fa-users',              'blue',   'Active Subscribers',   s.activeClients,   'Active subscription clients')}
-      ${this._card('fa-exclamation-circle', 'amber',  'Unpaid Subscribers',   s.unpaidClients,   'Not paid this month')}
-      ${this._card('fa-parking',            'cyan',   'Currently Parked',     s.currentlyParked, 'Vehicles in lot now')}`;
+      ${this._card('fa-dollar-sign',        'blue',   'Total Revenue',        this._fmtMoney(s.totalRevenue),    'Paid invoices + parking + services', 'total-revenue')}
+      ${this._card('fa-file-invoice',       'purple', 'Subscription Revenue', this._fmtMoney(s.subRevenue),      'Paid invoices this month',            'sub-revenue')}
+      ${this._card('fa-car',                'cyan',   'Parking Revenue',      this._fmtMoney(s.parkingRevenue),  'Daily parking income',                'parking-revenue')}
+      ${this._card('fa-shower',             'info',   'Services Revenue',     this._fmtMoney(s.servicesRevenue), 'Wash & cleaning income',              'services-revenue')}
+      ${this._card('fa-receipt',            'amber',  'Total Expenses',       this._fmtMoney(s.totalExpenses),   'All expenses this month',             'expenses')}
+      ${this._card('fa-chart-line', s.netProfit >= 0 ? 'green' : 'red', 'Net Profit', this._fmtMoney(s.netProfit), 'Revenue minus expenses', 'net-profit')}
+      ${this._card('fa-users',              'blue',   'Active Subscribers',   s.activeClients,   'Active subscription clients',  'active-subscribers')}
+      ${this._card('fa-exclamation-circle', 'amber',  'Unpaid Subscribers',   s.unpaidClients,   'Not paid this month',          'unpaid-subscribers')}
+      ${this._card('fa-parking',            'cyan',   'Currently Parked',     s.currentlyParked, 'Vehicles in lot now',          'currently-parked')}`;
   },
 
-  _card(icon, color, label, value, sub) {
+  _card(icon, color, label, value, sub, type) {
     const v = String(value);
     const fs = v.length > 14 ? '13px' : v.length > 11 ? '16px' : v.length > 8 ? '20px' : '24px';
-    return `<div class="stat-card">
+    const active = this._activeType === type;
+    return `<div class="stat-card dash-stat-clickable${active ? ' dash-stat-active' : ''}" onclick="DashboardPage.showDetails('${type}')" title="Click to view details">
       <div class="stat-icon ${color}"><i class="fas ${icon}"></i></div>
       <div class="stat-info">
         <div class="stat-label">${escHtml(label)}</div>
@@ -117,39 +103,179 @@ const DashboardPage = {
     </div>`;
   },
 
-  renderCharts(charts) {
-    this._charts.forEach(c => c.destroy());
-    this._charts = [];
-    const opts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } };
+  async showDetails(type) {
+    const month = document.getElementById('dash-month')?.value || today();
+    const s = this._stats;
 
-    const mkBar = (id, labels, data, color) => {
-      const ctx = document.getElementById(id);
-      if (!ctx) return;
-      this._charts.push(new Chart(ctx, {
-        type: 'bar',
-        data: { labels, datasets: [{ data, backgroundColor: color + '99', borderColor: color, borderWidth: 2, borderRadius: 6 }] },
-        options: { ...opts, scales: { y: { beginAtZero: true } } }
-      }));
-    };
-
-    mkBar('ch-revenue',  charts.revenueByMonth.map(r => r.month),  charts.revenueByMonth.map(r => r.amount),  '#3b82f6');
-    mkBar('ch-expenses', charts.expensesByMonth.map(r => r.month), charts.expensesByMonth.map(r => r.amount), '#ef4444');
-    mkBar('ch-parking',  charts.parkingByMonth.map(r => r.month),  charts.parkingByMonth.map(r => r.amount),  '#06b6d4');
-
-    const svcCtx = document.getElementById('ch-services');
-    if (svcCtx && charts.servicesByType.length) {
-      const colors = ['#3b82f6','#22c55e','#f59e0b','#ef4444','#8b5cf6','#06b6d4'];
-      this._charts.push(new Chart(svcCtx, {
-        type: 'doughnut',
-        data: {
-          labels: charts.servicesByType.map(s => s.name),
-          datasets: [{ data: charts.servicesByType.map(s => s.amount), backgroundColor: colors, borderWidth: 2 }]
-        },
-        options: { ...opts, plugins: { legend: { display: true, position: 'bottom', labels: { font: { size: 11 } } } } }
-      }));
-    } else if (svcCtx) {
-      svcCtx.parentElement.innerHTML += '<p class="text-muted text-center" style="font-size:13px;margin-top:16px">No service data this month</p>';
+    // Toggle off if same card clicked again
+    if (this._activeType === type) {
+      this._activeType = null;
+      document.getElementById('stats-grid').innerHTML = this._statCards(s);
+      document.getElementById('dash-detail-panel').innerHTML = '';
+      return;
     }
+
+    this._activeType = type;
+    document.getElementById('stats-grid').innerHTML = this._statCards(s);
+
+    const panel = document.getElementById('dash-detail-panel');
+    panel.innerHTML = `<div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">${escHtml(this._typeLabel(type))}</span></div><div style="padding:20px"><div class="loading"><div class="spinner"></div> Loading…</div></div></div>`;
+
+    // Local breakdown types — no API needed
+    if (type === 'total-revenue') {
+      panel.innerHTML = this._panelWrap('Total Revenue Breakdown', this._summaryTable([
+        { icon: 'fa-file-invoice', color: 'purple', label: 'Subscription Revenue', value: this._fmtMoney(s.subRevenue),      type: 'sub-revenue' },
+        { icon: 'fa-car',          color: 'cyan',   label: 'Parking Revenue',      value: this._fmtMoney(s.parkingRevenue),  type: 'parking-revenue' },
+        { icon: 'fa-shower',       color: 'info',   label: 'Services Revenue',     value: this._fmtMoney(s.servicesRevenue), type: 'services-revenue' },
+      ], { icon: 'fa-dollar-sign', color: 'blue', label: 'Total Revenue', value: this._fmtMoney(s.totalRevenue) }));
+      return;
+    }
+
+    if (type === 'net-profit') {
+      panel.innerHTML = this._panelWrap('Net Profit Breakdown', this._summaryTable([
+        { icon: 'fa-dollar-sign', color: 'blue',  label: 'Total Revenue',  value: this._fmtMoney(s.totalRevenue),  type: 'total-revenue' },
+        { icon: 'fa-receipt',     color: 'amber', label: 'Total Expenses', value: this._fmtMoney(s.totalExpenses), type: 'expenses' },
+      ], { icon: 'fa-chart-line', color: s.netProfit >= 0 ? 'green' : 'red', label: 'Net Profit', value: this._fmtMoney(s.netProfit) }));
+      return;
+    }
+
+    // API-based types
+    try {
+      const data = await API.get(`/dashboard/details?type=${type}&date=${month}`);
+      const html = this._buildTable(type, data);
+      panel.innerHTML = this._panelWrap(this._typeLabel(type), html, data.length);
+    } catch (e) {
+      panel.innerHTML = this._panelWrap(this._typeLabel(type), `<p class="text-muted text-center" style="padding:20px">${escHtml(e.message)}</p>`);
+    }
+  },
+
+  _panelWrap(title, content, count = null) {
+    const countBadge = count != null ? `<span class="badge" style="margin-left:8px;background:var(--primary);color:#fff">${count}</span>` : '';
+    return `<div class="card" style="margin-top:20px">
+      <div class="card-header" style="display:flex;align-items:center;justify-content:space-between">
+        <span class="card-title">${escHtml(title)}${countBadge}</span>
+        <button class="btn btn-sm btn-outline" onclick="DashboardPage.showDetails('${this._activeType}')"><i class="fas fa-times"></i> Close</button>
+      </div>
+      <div class="table-wrap">${content}</div>
+    </div>`;
+  },
+
+  _summaryTable(rows, total) {
+    return `<div style="display:flex;flex-direction:column;gap:10px;padding:20px">
+      ${rows.map(r => `
+        <div onclick="${r.type ? `DashboardPage.showDetails('${r.type}')` : ''}" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--bg);border-radius:8px;border:1px solid var(--border);${r.type ? 'cursor:pointer;transition:box-shadow .15s,transform .15s' : ''}" ${r.type ? `onmouseover="this.style.boxShadow='0 4px 14px rgba(0,0,0,.1)';this.style.transform='translateY(-1px)'" onmouseout="this.style.boxShadow='';this.style.transform=''"` : ''}>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="stat-icon ${r.color}" style="width:34px;height:34px;font-size:13px"><i class="fas ${r.icon}"></i></div>
+            <span style="font-weight:500">${escHtml(r.label)}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:600;font-size:15px">${escHtml(r.value)}</span>
+            ${r.type ? `<i class="fas fa-chevron-right" style="font-size:11px;color:var(--text-muted)"></i>` : ''}
+          </div>
+        </div>`).join('')}
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--primary);border-radius:8px;color:#fff">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:34px;height:34px;border-radius:8px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:13px"><i class="fas ${total.icon}"></i></div>
+          <span style="font-weight:700">${escHtml(total.label)}</span>
+        </div>
+        <span style="font-weight:700;font-size:18px">${escHtml(total.value)}</span>
+      </div>
+    </div>`;
+  },
+
+  _buildTable(type, data) {
+    if (!data.length) return `<div class="empty-state" style="padding:30px"><i class="fas fa-inbox"></i><h4>No records found</h4></div>`;
+
+    if (type === 'sub-revenue') return `<table>
+      <thead><tr><th>Client</th><th>Mobile</th><th>Plate</th><th>Plan</th><th>Amount</th></tr></thead>
+      <tbody>${data.map(r => `<tr>
+        <td><strong>${escHtml(r.clients?.full_name || '—')}</strong></td>
+        <td>${escHtml(r.clients?.mobile || '—')}</td>
+        <td>${escHtml(r.client_vehicles?.plate_number || '—')}</td>
+        <td>${escHtml(r.subscription_plans?.name || '—')}</td>
+        <td class="fw-bold">${fmtAmt(r.final_amount, r.currency)}</td>
+      </tr>`).join('')}</tbody></table>`;
+
+    if (type === 'parking-revenue') return `<table>
+      <thead><tr><th>Plate</th><th>Type</th><th>Company</th><th>Entry</th><th>Exit</th><th>Duration</th><th>Amount</th></tr></thead>
+      <tbody>${data.map(r => `<tr>
+        <td><strong>${escHtml(r.plate_number)}</strong></td>
+        <td>${vehicleBadge(r.vehicle_type)}</td>
+        <td>${r.third_party_company ? `<span class="badge badge-purple" style="font-size:10px">${escHtml(r.third_party_company)}</span>` : '<span class="text-muted">—</span>'}</td>
+        <td>${fmtDateTime(r.entry_time)}</td>
+        <td>${fmtDateTime(r.exit_time)}</td>
+        <td>${fmtDuration(r.duration_minutes)}</td>
+        <td class="fw-bold">${fmtAmt(r.amount, r.currency)}</td>
+      </tr>`).join('')}</tbody></table>`;
+
+    if (type === 'services-revenue') return `<table>
+      <thead><tr><th>Service</th><th>Client</th><th>Date</th><th>Amount</th></tr></thead>
+      <tbody>${data.map(r => `<tr>
+        <td><strong>${escHtml(r.services?.name || '—')}</strong></td>
+        <td>${escHtml(r.clients?.full_name || '—')}</td>
+        <td>${fmtDate(r.service_date)}</td>
+        <td class="fw-bold">${fmtAmt(r.final_amount, r.currency)}</td>
+      </tr>`).join('')}</tbody></table>`;
+
+    if (type === 'expenses') return `<table>
+      <thead><tr><th>Title</th><th>Type</th><th>Date</th><th>Paid To</th><th>Method</th><th>Amount</th></tr></thead>
+      <tbody>${data.map(r => `<tr>
+        <td><strong>${escHtml(r.title)}</strong></td>
+        <td>${escHtml(r.expense_type || '—')}</td>
+        <td>${fmtDate(r.expense_date)}</td>
+        <td>${escHtml(r.paid_to || '—')}</td>
+        <td>${escHtml(r.payment_method || '—')}</td>
+        <td class="fw-bold">${fmtAmt(r.amount, r.currency)}</td>
+      </tr>`).join('')}</tbody></table>`;
+
+    if (type === 'active-subscribers') return `<table>
+      <thead><tr><th>Client</th><th>Mobile</th><th>Plate</th><th>Vehicle</th><th>Plan</th><th>Rate</th></tr></thead>
+      <tbody>${data.map(r => `<tr>
+        <td><strong>${escHtml(r.clients?.full_name || '—')}</strong></td>
+        <td>${escHtml(r.clients?.mobile || '—')}</td>
+        <td>${escHtml(r.plate_number)}</td>
+        <td>${vehicleBadge(r.vehicle_type)}</td>
+        <td>${escHtml(r.subscription_plans?.name || '—')}</td>
+        <td class="fw-bold">${fmtAmt(r.amount, r.currency)}</td>
+      </tr>`).join('')}</tbody></table>`;
+
+    if (type === 'unpaid-subscribers') return `<table>
+      <thead><tr><th>Client</th><th>Mobile</th><th>Plate</th><th>Vehicle</th><th>Plan</th><th>Rate</th></tr></thead>
+      <tbody>${data.map(r => `<tr>
+        <td><strong>${escHtml(r.clients?.full_name || '—')}</strong></td>
+        <td>${escHtml(r.clients?.mobile || '—')}</td>
+        <td>${escHtml(r.plate_number)}</td>
+        <td>${vehicleBadge(r.vehicle_type)}</td>
+        <td>${escHtml(r.subscription_plans?.name || '—')}</td>
+        <td class="fw-bold">${fmtAmt(r.amount, r.currency)}</td>
+      </tr>`).join('')}</tbody></table>`;
+
+    if (type === 'currently-parked') return `<table>
+      <thead><tr><th>Plate</th><th>Type</th><th>Company</th><th>Entry Time</th><th>Duration</th><th>Notes</th></tr></thead>
+      <tbody>${data.map(r => {
+        const mins = Math.round((Date.now() - new Date(r.entry_time)) / 60000);
+        return `<tr>
+          <td><strong>${escHtml(r.plate_number)}</strong></td>
+          <td>${vehicleBadge(r.vehicle_type)}</td>
+          <td>${r.third_party_company ? `<span class="badge badge-purple" style="font-size:10px">${escHtml(r.third_party_company)}</span>` : '<span class="text-muted">—</span>'}</td>
+          <td>${fmtDateTime(r.entry_time)}</td>
+          <td>${fmtDuration(mins)}</td>
+          <td class="text-muted">${escHtml(r.notes || '—')}</td>
+        </tr>`;
+      }).join('')}</tbody></table>`;
+
+    return '';
+  },
+
+  _typeLabel(type) {
+    const map = {
+      'total-revenue': 'Total Revenue', 'sub-revenue': 'Subscription Revenue',
+      'parking-revenue': 'Parking Revenue', 'services-revenue': 'Services Revenue',
+      'expenses': 'Expenses This Month', 'net-profit': 'Net Profit',
+      'active-subscribers': 'Active Subscribers', 'unpaid-subscribers': 'Unpaid Subscribers This Month',
+      'currently-parked': 'Currently Parked Vehicles'
+    };
+    return map[type] || type;
   }
 };
 

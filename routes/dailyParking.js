@@ -31,7 +31,7 @@ router.post('/', authenticate, async (req, res) => {
 
 router.post('/:id/checkout', authenticate, async (req, res) => {
   try {
-    const { amount, payment_status, currency } = req.body;
+    const { amount, payment_status, currency, card_number } = req.body;
     const { data: entry } = await sb.from('daily_parking').select('*').eq('id', req.params.id).maybeSingle();
     if (!entry) return res.status(404).json({ error: 'Record not found' });
     if (entry.parking_status === 'completed') return res.status(400).json({ error: 'Already checked out' });

@@ -444,6 +444,19 @@ body {
   display: flex;
   align-items: flex-start;
   gap: 14px;
+  transition: box-shadow .15s, transform .15s;
+}
+.dash-stat-clickable {
+  cursor: pointer;
+  transition: box-shadow .15s, transform .15s, border-color .15s;
+}
+.dash-stat-clickable:hover {
+  box-shadow: 0 4px 18px rgba(0,0,0,.12);
+  transform: translateY(-2px);
+}
+.dash-stat-active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(99,102,241,.2);
 }
 .stat-icon {
   width: 48px; height: 48px; border-radius: 10px;
