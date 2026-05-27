@@ -101,6 +101,12 @@ const DashboardPage = {
     } catch { return 89500; }
   },
 
+  _fmtServiceRevenue(byCurrency) {
+    const entries = Object.entries(byCurrency || {}).filter(([, v]) => v > 0);
+    if (!entries.length) return fmtAmt(0, 'USD');
+    return entries.map(([cur, amt]) => fmtAmt(amt, cur)).join(' · ');
+  },
+
   _fmtMoney(value) {
     if (this._currency === 'LBP') {
       const lbp = (Number(value) || 0) * this._getLbpRate();
@@ -115,7 +121,7 @@ const DashboardPage = {
       ${this._card('fa-dollar-sign',        'blue',   'Total Revenue',        this._fmtMoney(s.totalRevenue),    period, 'total-revenue')}
       ${this._card('fa-file-invoice',       'purple', 'Subscription Revenue', this._fmtMoney(s.subRevenue),      period, 'sub-revenue')}
       ${this._card('fa-car',                'cyan',   'Parking Revenue',      this._fmtMoney(s.parkingRevenue),  period, 'parking-revenue')}
-      ${this._card('fa-shower',             'info',   'Services Revenue',     this._fmtMoney(s.servicesRevenue), period, 'services-revenue')}
+      ${this._card('fa-shower',             'info',   'Services Revenue',     this._fmtServiceRevenue(s.servicesRevenueByCurrency), period, 'services-revenue')}
       ${this._card('fa-receipt',            'amber',  'Total Expenses',       this._fmtMoney(s.totalExpenses),   period, 'expenses')}
       ${this._card('fa-chart-line', s.netProfit >= 0 ? 'green' : 'red', 'Net Profit', this._fmtMoney(s.netProfit), period, 'net-profit')}
       ${this._card('fa-users',              'blue',   'Active Subscribers',   s.activeClients,    this._mode === 'all' ? 'All active clients'   : `Active on ${period}`,       'active-subscribers')}
@@ -161,7 +167,7 @@ const DashboardPage = {
       panel.innerHTML = this._panelWrap('Total Revenue Breakdown', this._summaryTable([
         { icon: 'fa-file-invoice', color: 'purple', label: 'Subscription Revenue', value: this._fmtMoney(s.subRevenue),      type: 'sub-revenue' },
         { icon: 'fa-car',          color: 'cyan',   label: 'Parking Revenue',      value: this._fmtMoney(s.parkingRevenue),  type: 'parking-revenue' },
-        { icon: 'fa-shower',       color: 'info',   label: 'Services Revenue',     value: this._fmtMoney(s.servicesRevenue), type: 'services-revenue' },
+        { icon: 'fa-shower',       color: 'info',   label: 'Services Revenue',     value: this._fmtServiceRevenue(s.servicesRevenueByCurrency), type: 'services-revenue' },
       ], { icon: 'fa-dollar-sign', color: 'blue', label: 'Total Revenue', value: this._fmtMoney(s.totalRevenue) }));
       return;
     }

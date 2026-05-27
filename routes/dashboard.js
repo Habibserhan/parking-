@@ -16,7 +16,7 @@ router.get('/', authenticate, async (req, res) => {
     const all = mode === 'all';
 
     let parkQ      = sb.from('daily_parking').select('amount').eq('payment_status', 'paid');
-    let svcQ       = sb.from('service_transactions').select('final_amount').eq('payment_status', 'paid');
+    let svcQ       = sb.from('service_transactions').select('final_amount, currency').eq('payment_status', 'paid');
     let expQ       = sb.from('expenses').select('amount');
     let invQ       = sb.from('invoices').select('final_amount').eq('payment_status', 'paid');
     let unpaidInvQ = sb.from('invoices').select('id').eq('payment_status', 'unpaid');
@@ -56,7 +56,13 @@ router.get('/', authenticate, async (req, res) => {
 
     const subRevenue      = sum(paidInvResult.data || [], 'final_amount');
     const parkingRevenue  = sum(parkResult.data    || [], 'amount');
-    const servicesRevenue = sum(svcResult.data     || [], 'final_amount');
+    const svcData = svcResult.data || [];
+    const servicesRevenue = sum(svcData, 'final_amount');
+    const servicesRevenueByCurrency = svcData.reduce((acc, r) => {
+      const cur = r.currency || 'USD';
+      acc[cur] = (acc[cur] || 0) + (Number(r.final_amount) || 0);
+      return acc;
+    }, {});
     const totalRevenue    = subRevenue + parkingRevenue + servicesRevenue;
     const totalExpenses   = sum(expResult.data     || [], 'amount');
     const netProfit       = totalRevenue - totalExpenses;
@@ -67,7 +73,7 @@ router.get('/', authenticate, async (req, res) => {
     const thirdPartyParked = (thirdPartyResult.data || []).length;
 
     res.json({
-      stats: { totalRevenue, subRevenue, parkingRevenue, servicesRevenue, totalExpenses, netProfit, activeClients, unpaidClients, currentlyParked, thirdPartyParked }
+      stats: { totalRevenue, subRevenue, parkingRevenue, servicesRevenue, servicesRevenueByCurrency, totalExpenses, netProfit, activeClients, unpaidClients, currentlyParked, thirdPartyParked }
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

@@ -347,8 +347,6 @@ function statusBadge(status) {
 const VEHICLE_TYPES = [
   { value: 'car',        label: 'Car',        icon: 'fa-car' },
   { value: 'motorcycle', label: 'Motorcycle',  icon: 'fa-motorcycle' },
-  { value: 'van',        label: 'Van',         icon: 'fa-van-shuttle' },
-  { value: 'pickup',     label: 'Pickup',      icon: 'fa-truck-pickup' },
   { value: 'range',      label: 'Range',       icon: 'fa-car-side' },
 ];
 

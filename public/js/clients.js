@@ -107,7 +107,7 @@ const ClientsPage = {
         </div>
         <div class="form-group"><label>Start Date</label><input name="start_date" type="date" value="${today()}"></div>
         <div class="form-group"><label>Monthly Amount</label><input name="amount" type="number" step="0.01" min="0" id="veh-amount" placeholder="0.00"></div>
-        <div class="form-group"><label>Currency</label>${currencySelect('currency', 'USD')}</div>
+        <input type="hidden" name="currency" id="veh-currency" value="USD">
       </div>
     </form>`, onSave: async () => {
       if (!Modal.validate()) throw new Error('Please fill required fields');
@@ -117,11 +117,14 @@ const ClientsPage = {
       await API.post(`/clients/${clientId}/vehicles`, { ...data, amount: Number(data.amount) || 0 });
       Modal.close(); Toast.success('Vehicle added'); Router.navigate('clients');
     }});
-    // Auto-fill amount from plan
+    // Auto-fill amount and currency from plan
     setTimeout(() => {
       document.getElementById('veh-plan')?.addEventListener('change', e => {
         const plan = this.plans.find(p => p.id == e.target.value);
-        if (plan) document.getElementById('veh-amount').value = plan.price;
+        if (plan) {
+          document.getElementById('veh-amount').value = plan.price;
+          document.getElementById('veh-currency').value = plan.currency || 'USD';
+        }
       });
     }, 50);
   },
@@ -197,8 +200,8 @@ const ClientsPage = {
           <select name="subscription_plan_id"><option value="">— No Plan —</option>${planOpts}</select>
         </div>
         <div class="form-group"><label>Start Date</label><input name="start_date" type="date" value="${v.start_date || ''}"></div>
-        <div class="form-group"><label>Monthly Amount</label><input name="amount" type="number" step="0.01" value="${v.amount || 0}"></div>
-        <div class="form-group"><label>Currency</label>${currencySelect('currency', v.currency)}</div>
+        <div class="form-group"><label>Monthly Amount</label><input name="amount" type="number" step="0.01" value="${v.amount || 0}" id="edit-veh-amount"></div>
+        <input type="hidden" name="currency" id="edit-veh-currency" value="${escHtml(v.currency || 'USD')}">
         <div class="form-group"><label>Status</label>
           <select name="status">
             <option value="active" ${v.status==='active'?'selected':''}>Active</option>
@@ -213,6 +216,15 @@ const ClientsPage = {
       await API.put(`/clients/vehicles/${vehicleId}`, { ...data, amount: Number(data.amount), currency: data.currency || 'USD' });
       Modal.close(); Toast.success('Vehicle updated'); Router.navigate('clients');
     }});
+    setTimeout(() => {
+      document.querySelector('[name=subscription_plan_id]')?.addEventListener('change', e => {
+        const plan = this.plans.find(p => p.id == e.target.value);
+        if (plan) {
+          document.getElementById('edit-veh-amount').value = plan.price;
+          document.getElementById('edit-veh-currency').value = plan.currency || 'USD';
+        }
+      });
+    }, 50);
   },
 
   async deleteClient(clientId) {
