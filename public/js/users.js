@@ -112,7 +112,7 @@ const UsersPage = {
         <td>
           ${code === 'LBP'
             ? `<span class="text-muted">—</span>`
-            : `<input type="number" class="cur-rate-input" data-code="${escHtml(code)}" value="${cfg.rate || ''}" min="0" step="any" placeholder="e.g. 89500" style="width:130px;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:600">`
+            : `<input type="text" inputmode="numeric" class="cur-rate-input" data-code="${escHtml(code)}" value="${cfg.rate ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 }).format(cfg.rate) : ''}" placeholder="e.g. 89,500" style="width:130px;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:600">`
           }
         </td>
         <td class="actions">
@@ -130,7 +130,7 @@ const UsersPage = {
     const currencies = this._loadCurrencies();
     document.querySelectorAll('.cur-rate-input').forEach(input => {
       const code = input.dataset.code;
-      const rate = parseFloat(input.value);
+      const rate = parseAmountInput(input.value);
       if (code && currencies[code]) currencies[code].rate = rate > 0 ? rate : null;
     });
     await this._saveCurrencyMap(currencies);
@@ -225,7 +225,7 @@ const UsersPage = {
     Modal.show({ title: 'Add Third Party Company', size: 'sm', body: `<form id="modal-form">
       <div class="form-row">
         <div class="form-group"><label>Company Name *</label><input name="name" required placeholder="e.g. ABC Company"></div>
-        <div class="form-group"><label>Rate per Vehicle / Month *</label><input name="rate" type="number" min="0" step="any" required placeholder="e.g. 150"></div>
+        <div class="form-group"><label>Rate per Vehicle / Month *</label><input name="rate" type="text" inputmode="numeric" required placeholder="e.g. 150"></div>
         <div class="form-group"><label>Currency</label>${currencySelect('currency', 'USD')}</div>
       </div>
     </form>`, saveLabel: 'Add', onSave: async () => {
@@ -233,7 +233,7 @@ const UsersPage = {
       const data = Modal.getFormData();
       const companies = this._getThirdParties();
       if (companies.find(c => c.name.toLowerCase() === data.name.trim().toLowerCase())) throw new Error('Company already exists');
-      companies.push({ name: data.name.trim(), rate: parseFloat(data.rate), currency: data.currency || 'USD' });
+      companies.push({ name: data.name.trim(), rate: parseAmountInput(data.rate), currency: data.currency || 'USD' });
       await this._saveThirdParties(companies);
       Modal.close(); Toast.success('Company added');
       document.getElementById('tp-list').innerHTML = this._renderThirdPartyList(companies);
@@ -247,13 +247,13 @@ const UsersPage = {
     Modal.show({ title: 'Edit Third Party Company', size: 'sm', body: `<form id="modal-form">
       <div class="form-row">
         <div class="form-group"><label>Company Name *</label><input name="name" required value="${escHtml(company.name)}"></div>
-        <div class="form-group"><label>Rate per Vehicle / Month *</label><input name="rate" type="number" min="0" step="any" required value="${company.rate}"></div>
+        <div class="form-group"><label>Rate per Vehicle / Month *</label><input name="rate" type="text" inputmode="numeric" required value="${fmtAmountInput(company.rate, company.currency || 'USD')}"></div>
         <div class="form-group"><label>Currency</label>${currencySelect('currency', company.currency || 'USD')}</div>
       </div>
     </form>`, saveLabel: 'Save', onSave: async () => {
       if (!Modal.validate()) throw new Error('Please fill required fields');
       const data = Modal.getFormData();
-      const updated = companies.map(c => c.name === name ? { name: data.name.trim(), rate: parseFloat(data.rate), currency: data.currency || 'USD' } : c);
+      const updated = companies.map(c => c.name === name ? { name: data.name.trim(), rate: parseAmountInput(data.rate), currency: data.currency || 'USD' } : c);
       await this._saveThirdParties(updated);
       Modal.close(); Toast.success('Company updated');
       document.getElementById('tp-list').innerHTML = this._renderThirdPartyList(updated);
@@ -340,7 +340,7 @@ const UsersPage = {
     return `<form id="modal-form"><div class="form-row cols-2">
       <div class="form-group"><label>From (hours) *</label><input name="from" type="number" min="0" step="0.5" required value="${t.from ?? ''}" placeholder="e.g. 0"></div>
       <div class="form-group"><label>To (hours)</label><input name="to" type="number" min="0" step="0.5" value="${t.to ?? ''}" placeholder="Leave blank = and above"></div>
-      <div class="form-group"><label>Price *</label><input name="price" type="number" min="0" step="any" required value="${t.price ?? ''}" placeholder="e.g. 10"></div>
+      <div class="form-group"><label>Price *</label><input name="price" type="text" inputmode="numeric" required value="${fmtAmountInput(t.price, t.currency || 'USD')}" placeholder="e.g. 10"></div>
       <div class="form-group"><label>Currency</label>${currencySelect('currency', t.currency || 'USD')}</div>
     </div></form>`;
   },
@@ -351,7 +351,7 @@ const UsersPage = {
       const data = Modal.getFormData();
       const rates = this._getParkingRates();
       if (!Array.isArray(rates[vehicleType])) rates[vehicleType] = [];
-      rates[vehicleType].push({ from: Number(data.from), to: data.to !== '' ? Number(data.to) : null, price: Number(data.price), currency: data.currency || 'USD' });
+      rates[vehicleType].push({ from: Number(data.from), to: data.to !== '' ? Number(data.to) : null, price: parseAmountInput(data.price), currency: data.currency || 'USD' });
       rates[vehicleType].sort((a, b) => a.from - b.from);
       await this._saveParkingRatesFull(rates);
       Modal.close(); Toast.success('Tier added');
@@ -366,7 +366,7 @@ const UsersPage = {
     Modal.show({ title: `Edit Tier — ${VEHICLE_TYPES.find(v => v.value === vehicleType)?.label || vehicleType}`, body: this._tierFormHtml(tier), saveLabel: 'Save', onSave: async () => {
       if (!Modal.validate()) throw new Error('From and Price are required');
       const data = Modal.getFormData();
-      rates[vehicleType][index] = { from: Number(data.from), to: data.to !== '' ? Number(data.to) : null, price: Number(data.price), currency: data.currency || 'USD' };
+      rates[vehicleType][index] = { from: Number(data.from), to: data.to !== '' ? Number(data.to) : null, price: parseAmountInput(data.price), currency: data.currency || 'USD' };
       rates[vehicleType].sort((a, b) => a.from - b.from);
       await this._saveParkingRatesFull(rates);
       Modal.close(); Toast.success('Tier updated');

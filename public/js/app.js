@@ -242,9 +242,10 @@ function fmtAmt(amount, currency) {
   const cfg = map[cur] || CURRENCIES[cur] || { symbol: cur, dec: 2, multiplier: 1 };
   const multiplier = cfg.multiplier || 1;
   const n = (Number(amount) || 0) * multiplier;
+  const dec = cfg.dec ?? CURRENCIES[cur]?.dec ?? 2;
   return cfg.symbol + ' ' + new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: cfg.dec ?? 2,
-    maximumFractionDigits: cfg.dec ?? 2
+    minimumFractionDigits: dec,
+    maximumFractionDigits: dec
   }).format(n);
 }
 
@@ -255,10 +256,31 @@ function fmtRaw(amount, currency) {
   const map = _getCurrencyMap();
   const cfg = map[cur] || CURRENCIES[cur] || { symbol: cur, dec: 2 };
   const n = Number(amount) || 0;
+  const dec = cfg.dec ?? CURRENCIES[cur]?.dec ?? 2;
   return cfg.symbol + ' ' + new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: cfg.dec ?? 2,
-    maximumFractionDigits: cfg.dec ?? 2
+    minimumFractionDigits: dec,
+    maximumFractionDigits: dec
   }).format(n);
+}
+
+// Format a number for display in a text input with thousand separators.
+// Returns empty string for zero/null so required inputs stay visually empty.
+function fmtAmountInput(n, currency) {
+  const num = Number(n) || 0;
+  if (!num) return '';
+  const cur = (currency || 'USD').toUpperCase();
+  const map = _getCurrencyMap();
+  const cfg = map[cur] || CURRENCIES[cur] || {};
+  const dec = cfg.dec ?? CURRENCIES[cur]?.dec ?? 2;
+  return new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: dec,
+    maximumFractionDigits: dec
+  }).format(num);
+}
+
+// Strip thousand separators and parse a text-input amount value to a number.
+function parseAmountInput(str) {
+  return Number(String(str || '').replace(/,/g, '')) || 0;
 }
 
 // ---- Shared currency conversion helpers ----

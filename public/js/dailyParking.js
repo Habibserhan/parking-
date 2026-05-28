@@ -196,14 +196,14 @@ const DailyParkingPage = {
           <select name="vehicle_type" required>${vehicleTypeOptions('car')}</select>
         </div>
         <div class="form-group" style="grid-column:1/-1"><label>Entry Time</label><input name="entry_time" type="datetime-local" value="${now}"></div>
-        <div class="form-group" style="grid-column:1/-1"><label><i class="fas fa-credit-card" style="color:var(--primary);margin-right:6px"></i>Card Number</label><input name="card_number" placeholder="Optional — enter card number" style="letter-spacing:1px"></div>
+        <div class="form-group" style="grid-column:1/-1"><label id="ci-card-label"><i class="fas fa-credit-card" style="color:var(--primary);margin-right:6px"></i>Card Number</label><input name="card_number" id="ci-card-number" placeholder="Optional — enter card number" style="letter-spacing:1px"></div>
         <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea name="notes" placeholder="Optional notes…"></textarea></div>
         <div class="form-group" style="grid-column:1/-1"><label><i class="fas fa-building" style="color:var(--primary);margin-right:6px"></i>Third Party Company</label>
-          <select name="third_party_company"><option value="">— Not Third Party —</option>${(() => { try { const p = JSON.parse(window.appSettings?.custom_rates||'{}'); return (Array.isArray(p.__thirdParties)?p.__thirdParties:[]).map(c=>`<option value="${escHtml(c.name)}">${escHtml(c.name)}</option>`).join(''); } catch { return ''; } })()}</select>
+          <select name="third_party_company" onchange="DailyParkingPage._onThirdPartyChange()"><option value="">— Not Third Party —</option>${(() => { try { const p = JSON.parse(window.appSettings?.custom_rates||'{}'); return (Array.isArray(p.__thirdParties)?p.__thirdParties:[]).map(c=>`<option value="${escHtml(c.name)}">${escHtml(c.name)}</option>`).join(''); } catch { return ''; } })()}</select>
         </div>
       </div>
     </form>`, saveLabel: 'Check In', onSave: async () => {
-      if (!Modal.validate()) throw new Error('Plate number and vehicle type required');
+      if (!Modal.validate()) throw new Error('Please fill in all required fields');
       const data = Modal.getFormData();
       data.plate_number = data.plate_number.toUpperCase();
       await API.post('/daily-parking', data);
@@ -241,7 +241,7 @@ const DailyParkingPage = {
         ? `<div id="co-calc-note" style="margin-top:6px;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--text-muted)"><i class="fas fa-calculator" style="margin-right:4px"></i>${fmtDuration(mins)} → tier ${calc.tier.from}h–${calc.tier.to != null ? calc.tier.to + 'h' : '∞'} = ${fmtRaw(calc.amount, calc.currency)}</div>`
         : `<div id="co-calc-note" style="margin-top:6px;font-size:12px;color:var(--text-muted)">No rate tier set — enter manually</div>`;
     }
-    Modal.show({ title: `Check Out — ${record?.plate_number}`, body: `
+    Modal.show({ title: `Check Out — ${record?.plate_number}${record?.third_party_company ? ` <span class="badge badge-purple">${escHtml(record.third_party_company)}</span>` : ''}`, body: `
       <div style="background:var(--bg);border-radius:8px;padding:14px;margin-bottom:16px">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div><small class="text-muted">Entry</small><div>${fmtDateTime(record?.entry_time)}</div></div>
@@ -255,8 +255,8 @@ const DailyParkingPage = {
             <input name="exit_time" id="co-exit-time" type="datetime-local" value="${exitNow}"
               onchange="DailyParkingPage._onExitTimeChange(${id})">
           </div>
-          <div class="form-group" style="grid-column:1/-1"><label><i class="fas fa-credit-card" style="color:var(--primary);margin-right:6px"></i>Card Number</label><input name="card_number" value="${escHtml(record?.card_number || '')}" placeholder="Optional — enter card number" style="letter-spacing:1px"></div>
-          <div class="form-group"><label>Amount *</label><input name="amount" id="co-amount" type="number" step="1" min="0" required placeholder="0" value="${inputAmount}">${calcNote}</div>
+          <div class="form-group" style="grid-column:1/-1"><label><i class="fas fa-credit-card" style="color:var(--primary);margin-right:6px"></i>Card Number${record?.third_party_company ? ' *' : ''}</label><input name="card_number" value="${escHtml(record?.card_number || '')}" placeholder="${record?.third_party_company ? 'Required for third party' : 'Optional — enter card number'}" style="letter-spacing:1px"${record?.third_party_company ? ' required' : ''}></div>
+          <div class="form-group"><label>Amount *</label><input name="amount" id="co-amount" type="text" inputmode="numeric" required placeholder="0" value="${fmtAmountInput(inputAmount, autoCurrency)}">${calcNote}</div>
           <div class="form-group"><label>Currency</label>${currencySelect('currency', autoCurrency)}</div>
           <div class="form-group"><label>Payment Status</label>
             <select name="payment_status"><option value="paid">Paid</option><option value="unpaid">Unpaid</option></select>
@@ -268,7 +268,7 @@ const DailyParkingPage = {
       const saveCfg = _getCurrencyMap()[data.currency] || {};
       const saveMult = saveCfg.multiplier || 1;
       await API.post(`/daily-parking/${id}/checkout`, {
-        amount: Number(data.amount) / saveMult,
+        amount: parseAmountInput(data.amount) / saveMult,
         payment_status: data.payment_status,
         currency: data.currency || 'USD',
         card_number: data.card_number || null,
@@ -276,6 +276,18 @@ const DailyParkingPage = {
       });
       Modal.close(); Toast.success('Vehicle checked out'); Router.navigate('daily-parking');
     }});
+  },
+
+  _onThirdPartyChange() {
+    const sel = document.querySelector('#modal-form select[name="third_party_company"]');
+    const inp = document.getElementById('ci-card-number');
+    const lbl = document.getElementById('ci-card-label');
+    const isThird = sel && sel.value !== '';
+    if (inp) {
+      inp.required = isThird;
+      inp.placeholder = isThird ? 'Required for third party' : 'Optional — enter card number';
+    }
+    if (lbl) lbl.innerHTML = `<i class="fas fa-credit-card" style="color:var(--primary);margin-right:6px"></i>Card Number${isThird ? ' *' : ''}`;
   },
 
   _onExitTimeChange(id) {
@@ -291,7 +303,7 @@ const DailyParkingPage = {
       const calc = calcParkingAmount(record.vehicle_type, mins);
       const amountEl = document.getElementById('co-amount');
       const noteEl   = document.getElementById('co-calc-note');
-      if (calc && amountEl) amountEl.value = calc.amount;
+      if (calc && amountEl) amountEl.value = fmtAmountInput(calc.amount, calc.currency);
       if (noteEl) noteEl.innerHTML = calc
         ? `<i class="fas fa-calculator" style="margin-right:4px"></i>${fmtDuration(mins)} → tier ${calc.tier.from}h–${calc.tier.to != null ? calc.tier.to + 'h' : '∞'} = ${fmtRaw(calc.amount, calc.currency)}`
         : 'No rate tier set — enter manually';
@@ -307,7 +319,7 @@ const DailyParkingPage = {
         <div class="form-group"><label>Vehicle Type</label>
           <select name="vehicle_type">${vehicleTypeOptions(r.vehicle_type)}</select>
         </div>
-        <div class="form-group"><label>Amount</label><input name="amount" type="number" step="0.01" value="${r.amount || 0}"></div>
+        <div class="form-group"><label>Amount</label><input name="amount" type="text" inputmode="numeric" value="${fmtAmountInput(r.amount, r.currency)}"></div>
         <div class="form-group"><label>Currency</label>${currencySelect('currency', r.currency)}</div>
         <div class="form-group"><label>Payment Status</label>
           <select name="payment_status"><option value="paid" ${r.payment_status==='paid'?'selected':''}>Paid</option><option value="unpaid" ${r.payment_status==='unpaid'?'selected':''}>Unpaid</option></select>
@@ -320,7 +332,7 @@ const DailyParkingPage = {
       </div>
     </form>`, onSave: async () => {
       const data = Modal.getFormData();
-      await API.put(`/daily-parking/${id}`, { ...r, ...data, amount: Number(data.amount) });
+      await API.put(`/daily-parking/${id}`, { ...r, ...data, amount: parseAmountInput(data.amount) });
       Modal.close(); Toast.success('Updated'); Router.navigate('daily-parking');
     }});
   },

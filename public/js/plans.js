@@ -80,7 +80,7 @@ const PlansPage = {
           <option value="daily" ${p.duration==='daily'?'selected':''}>Daily</option>
         </select>
       </div>
-      <div class="form-group"><label>Price *</label><input name="price" type="number" step="0.01" min="0" required value="${escHtml(p.price || '')}"></div>
+      <div class="form-group"><label>Price *</label><input name="price" type="text" inputmode="numeric" required value="${fmtAmountInput(p.price, p.currency)}"></div>
       <div class="form-group"><label>Currency</label>${currencySelect('currency', p.currency)}</div>
       <div class="form-group"><label>Status</label>
         <select name="is_active">
@@ -96,7 +96,7 @@ const PlansPage = {
     Modal.show({ title: 'Add Subscription Plan', body: this._formHtml(), onSave: async () => {
       if (!Modal.validate()) throw new Error('Please fill all required fields');
       const data = Modal.getFormData();
-      await API.post('/plans', { ...data, price: Number(data.price), is_active: Number(data.is_active) });
+      await API.post('/plans', { ...data, price: parseAmountInput(data.price), is_active: Number(data.is_active) });
       Modal.close(); Toast.success('Plan created'); await Router.navigate('plans');
     }});
   },
@@ -106,7 +106,7 @@ const PlansPage = {
     Modal.show({ title: 'Edit Plan', body: this._formHtml(p), onSave: async () => {
       if (!Modal.validate()) throw new Error('Please fill all required fields');
       const data = Modal.getFormData();
-      await API.put(`/plans/${id}`, { ...data, price: Number(data.price), is_active: Number(data.is_active) });
+      await API.put(`/plans/${id}`, { ...data, price: parseAmountInput(data.price), is_active: Number(data.is_active) });
       Modal.close(); Toast.success('Plan updated'); await Router.navigate('plans');
     }});
   },

@@ -100,15 +100,15 @@ const UnpaidPage = {
     const vehicle = this.data.find(r => r.vehicle_id === vehicleId);
     Modal.show({ title: 'Create Invoice', size: 'sm', body: `<form id="modal-form">
       <div class="form-row">
-        <div class="form-group"><label>Amount</label><input name="amount" type="number" step="0.01" value="${vehicle?.amount || 0}"></div>
-        <div class="form-group"><label>Discount</label><input name="discount" type="number" step="0.01" value="0"></div>
+        <div class="form-group"><label>Amount</label><input name="amount" type="text" inputmode="numeric" value="${fmtAmountInput(vehicle?.amount, vehicle?.currency)}"></div>
+        <div class="form-group"><label>Discount</label><input name="discount" type="text" inputmode="numeric" value=""></div>
         <div class="form-group"><label>Due Date</label><input name="due_date" type="date" value="${month}-28"></div>
       </div>
     </form>`, saveLabel: 'Create', onSave: async () => {
       const data = Modal.getFormData();
       await API.post('/invoices', {
         client_id: clientId, vehicle_id: vehicleId,
-        invoice_month: month, amount: Number(data.amount), discount: Number(data.discount) || 0,
+        invoice_month: month, amount: parseAmountInput(data.amount), discount: parseAmountInput(data.discount),
         due_date: data.due_date, payment_status: 'unpaid'
       });
       Modal.close(); Toast.success('Invoice created'); this.reload();

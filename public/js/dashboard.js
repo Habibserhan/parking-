@@ -7,6 +7,7 @@ const DashboardPage = {
   _currency: 'USD',
   _activeType: null,
   _mode: 'date', // 'date' | 'all'
+  _parkingDetailStatus: 'parked',
 
   async render() {
     return `
@@ -173,6 +174,14 @@ const DashboardPage = {
       return;
     }
 
+    // Parking detail — custom panel with Parked / Completed toggle
+    if (type === 'currently-parked') {
+      this._parkingDetailStatus = 'parked';
+      panel.innerHTML = this._parkingPanelHtml();
+      await this.loadParkingDetail('parked');
+      return;
+    }
+
     // API-based types
     try {
       const dateFrom = document.getElementById('dash-from')?.value || today();
@@ -183,6 +192,54 @@ const DashboardPage = {
       panel.innerHTML = this._panelWrap(this._typeLabel(type), html, data.length);
     } catch (e) {
       panel.innerHTML = this._panelWrap(this._typeLabel(type), `<p class="text-muted text-center" style="padding:20px">${escHtml(e.message)}</p>`);
+    }
+  },
+
+  _parkingPanelHtml() {
+    const s = this._parkingDetailStatus;
+    return `<div class="card" style="margin-top:20px">
+      <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="card-title">Vehicles Parked</span>
+          <span id="pk-count" class="badge" style="background:var(--primary);color:#fff">…</span>
+          <div style="display:flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;height:30px">
+            <button id="pk-btn-parked" onclick="DashboardPage.loadParkingDetail('parked')"
+              style="padding:0 14px;border:none;background:${s==='parked'?'var(--primary)':'transparent'};color:${s==='parked'?'#fff':'var(--text-muted)'};font-weight:600;cursor:pointer;font-size:12px;transition:.15s">
+              <i class="fas fa-parking" style="margin-right:4px"></i>Parked
+            </button>
+            <button id="pk-btn-completed" onclick="DashboardPage.loadParkingDetail('completed')"
+              style="padding:0 14px;border:none;background:${s==='completed'?'var(--primary)':'transparent'};color:${s==='completed'?'#fff':'var(--text-muted)'};font-weight:600;cursor:pointer;font-size:12px;transition:.15s">
+              <i class="fas fa-check-circle" style="margin-right:4px"></i>Completed
+            </button>
+          </div>
+        </div>
+        <button class="btn btn-sm btn-outline" onclick="DashboardPage.showDetails('currently-parked')"><i class="fas fa-times"></i> Close</button>
+      </div>
+      <div class="table-wrap" id="parking-detail-table">
+        <div class="loading"><div class="spinner"></div> Loading…</div>
+      </div>
+    </div>`;
+  },
+
+  async loadParkingDetail(status) {
+    this._parkingDetailStatus = status;
+    const pBtn = document.getElementById('pk-btn-parked');
+    const cBtn = document.getElementById('pk-btn-completed');
+    if (pBtn) { pBtn.style.background = status === 'parked' ? 'var(--primary)' : 'transparent'; pBtn.style.color = status === 'parked' ? '#fff' : 'var(--text-muted)'; }
+    if (cBtn) { cBtn.style.background = status === 'completed' ? 'var(--primary)' : 'transparent'; cBtn.style.color = status === 'completed' ? '#fff' : 'var(--text-muted)'; }
+    const tableWrap = document.getElementById('parking-detail-table');
+    if (!tableWrap) return;
+    tableWrap.innerHTML = '<div class="loading"><div class="spinner"></div> Loading…</div>';
+    try {
+      const dateFrom  = document.getElementById('dash-from')?.value || today();
+      const dateTo    = document.getElementById('dash-to')?.value   || today();
+      const modeParam = this._mode === 'all' ? 'all' : 'date';
+      const data = await API.get(`/dashboard/details?type=currently-parked&date_from=${dateFrom}&date_to=${dateTo}&mode=${modeParam}&parking_status=${status}`);
+      const countEl = document.getElementById('pk-count');
+      if (countEl) countEl.textContent = data.length;
+      tableWrap.innerHTML = this._buildTable('currently-parked', data);
+    } catch (e) {
+      tableWrap.innerHTML = `<p class="text-muted text-center" style="padding:20px">${escHtml(e.message)}</p>`;
     }
   },
 
@@ -295,7 +352,7 @@ const DashboardPage = {
       </tr>`).join('')}</tbody></table>`;
 
     if (type === 'currently-parked') return `<table>
-      <thead><tr><th>Plate</th><th>Type</th><th>Company</th><th>Entry Time</th><th>Exit Time</th><th>Duration</th><th>Status</th><th>Notes</th></tr></thead>
+      <thead><tr><th>Plate</th><th>Type</th><th>Company</th><th>Card #</th><th>Entry Time</th><th>Exit Time</th><th>Duration</th><th>Status</th><th>Notes</th></tr></thead>
       <tbody>${data.map(r => {
         const endTime = r.exit_time ? new Date(r.exit_time) : Date.now();
         const mins = Math.round((endTime - new Date(r.entry_time)) / 60000);
@@ -303,6 +360,7 @@ const DashboardPage = {
           <td><strong>${escHtml(r.plate_number)}</strong></td>
           <td>${vehicleBadge(r.vehicle_type)}</td>
           <td>${r.third_party_company ? `<span class="badge badge-purple" style="font-size:10px">${escHtml(r.third_party_company)}</span>` : '<span class="text-muted">—</span>'}</td>
+          <td class="text-muted" style="letter-spacing:1px">${escHtml(r.card_number || '—')}</td>
           <td>${fmtDateTime(r.entry_time)}</td>
           <td>${r.exit_time ? fmtDateTime(r.exit_time) : '<span class="badge badge-success">Still inside</span>'}</td>
           <td>${fmtDuration(mins)}</td>

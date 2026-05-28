@@ -107,10 +107,10 @@ const InvoicesPage = {
         <select name="vehicle_id" required id="inv-vehicle" onchange="InvoicesPage.fillFromVehicle()"><option value="">Select vehicle</option></select>
       </div>
       <div class="form-group"><label>Invoice Month *</label><input name="invoice_month" type="month" required value="${inv.invoice_month || currentMonth()}"></div>
-      <div class="form-group"><label>Amount *</label><input name="amount" type="number" step="0.01" min="0" required value="${inv.amount || ''}" id="inv-amount" oninput="InvoicesPage.calcFinal()"></div>
+      <div class="form-group"><label>Amount *</label><input name="amount" type="text" inputmode="numeric" required value="${fmtAmountInput(inv.amount, inv.currency)}" id="inv-amount" oninput="InvoicesPage.calcFinal()"></div>
       <div class="form-group"><label>Currency</label>${currencySelect('currency', inv.currency)}</div>
-      <div class="form-group"><label>Discount</label><input name="discount" type="number" step="0.01" min="0" value="${inv.discount || 0}" oninput="InvoicesPage.calcFinal()"></div>
-      <div class="form-group"><label>Final Amount</label><input id="inv-final" type="number" step="0.01" value="${inv.final_amount || ''}" readonly style="background:#f8fafc"></div>
+      <div class="form-group"><label>Discount</label><input name="discount" type="text" inputmode="numeric" value="${fmtAmountInput(inv.discount, inv.currency)}" oninput="InvoicesPage.calcFinal()"></div>
+      <div class="form-group"><label>Final Amount</label><input id="inv-final" type="text" value="${fmtAmountInput(inv.final_amount, inv.currency)}" readonly style="background:#f8fafc"></div>
       <div class="form-group"><label>Due Date</label><input name="due_date" type="date" value="${inv.due_date || ''}"></div>
       <div class="form-group"><label>Payment Status</label>
         <select name="payment_status">
@@ -142,16 +142,18 @@ const InvoicesPage = {
   fillFromVehicle() {
     const opt = document.getElementById('inv-vehicle')?.options[document.getElementById('inv-vehicle').selectedIndex];
     if (opt && opt.dataset.amount) {
-      document.getElementById('inv-amount').value = opt.dataset.amount;
+      const cur = document.querySelector('#modal-form [name=currency]')?.value || 'USD';
+      document.getElementById('inv-amount').value = fmtAmountInput(opt.dataset.amount, cur);
       this.calcFinal();
     }
   },
 
   calcFinal() {
-    const amount   = Number(document.getElementById('inv-amount')?.value) || 0;
-    const discount = Number(document.querySelector('#modal-form [name=discount]')?.value) || 0;
+    const amount   = parseAmountInput(document.getElementById('inv-amount')?.value);
+    const discount = parseAmountInput(document.querySelector('#modal-form [name=discount]')?.value);
+    const cur      = document.querySelector('#modal-form [name=currency]')?.value || 'USD';
     const el = document.getElementById('inv-final');
-    if (el) el.value = Math.max(0, amount - discount).toFixed(2);
+    if (el) el.value = fmtAmountInput(Math.max(0, amount - discount), cur);
   },
 
   showAdd() {
@@ -162,9 +164,9 @@ const InvoicesPage = {
       await API.post('/invoices', {
         ...data,
         subscription_plan_id: vehOpt?.dataset.plan || null,
-        amount: Number(data.amount),
-        discount: Number(data.discount) || 0,
-        final_amount: Number(data.amount) - (Number(data.discount) || 0)
+        amount: parseAmountInput(data.amount),
+        discount: parseAmountInput(data.discount),
+        final_amount: parseAmountInput(data.amount) - parseAmountInput(data.discount)
       });
       Modal.close(); Toast.success('Invoice created'); Router.navigate('invoices');
     }});
@@ -174,7 +176,7 @@ const InvoicesPage = {
     const inv = this.data.find(x => x.id === id);
     Modal.show({ title: 'Edit Invoice', size: 'lg', body: this._formHtml(inv), onSave: async () => {
       const data = Modal.getFormData();
-      await API.put(`/invoices/${id}`, { ...data, amount: Number(data.amount), discount: Number(data.discount) || 0 });
+      await API.put(`/invoices/${id}`, { ...data, amount: parseAmountInput(data.amount), discount: parseAmountInput(data.discount), final_amount: parseAmountInput(data.amount) - parseAmountInput(data.discount) });
       Modal.close(); Toast.success('Invoice updated'); Router.navigate('invoices');
     }});
     setTimeout(() => { this.loadClientVehicles(); this.calcFinal(); }, 50);

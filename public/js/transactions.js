@@ -119,7 +119,7 @@ const TransactionsPage = {
       <div class="form-group" style="grid-column:1/-1"><label>Service</label>
         <select name="service_id" id="tx-service-sel" onchange="TransactionsPage.fillPrice()">${svcOpts}</select>
       </div>
-      <div class="form-group"><label>Price</label><input name="price" type="number" step="0.01" id="tx-price" value="${t.price ?? (defaultSvc?.price ?? 0)}"></div>
+      <div class="form-group"><label>Price</label><input name="price" type="text" inputmode="numeric" id="tx-price" value="${fmtAmountInput(t.price ?? defaultSvc?.price, defaultCurrency)}"></div>
       <div class="form-group"><label>Currency</label>${currencySelect('currency', defaultCurrency)}</div>
       <div class="form-group"><label>Payment Status</label>
         <select name="payment_status"><option value="paid" ${t.payment_status==='paid'?'selected':''}>Paid</option><option value="unpaid" ${t.payment_status!=='paid'?'selected':''}>Unpaid</option></select>
@@ -131,7 +131,7 @@ const TransactionsPage = {
     const sel = document.getElementById('tx-service-sel');
     const opt = sel?.options[sel.selectedIndex];
     if (!opt) return;
-    if (opt.dataset.price !== undefined) document.getElementById('tx-price').value = opt.dataset.price;
+    if (opt.dataset.price !== undefined) document.getElementById('tx-price').value = fmtAmountInput(opt.dataset.price, opt.dataset.currency || 'USD');
     if (opt.dataset.currency) {
       const curSel = document.querySelector('#modal-form select[name="currency"]');
       if (curSel) curSel.value = opt.dataset.currency;
@@ -141,7 +141,7 @@ const TransactionsPage = {
   showAdd() {
     Modal.show({ title: 'New Service Transaction', size: 'sm', body: this._formHtml(), onSave: async () => {
       const data = Modal.getFormData();
-      await API.post('/transactions', { ...data, price: Number(data.price), discount: 0, final_amount: Number(data.price) });
+      await API.post('/transactions', { ...data, price: parseAmountInput(data.price), discount: 0, final_amount: parseAmountInput(data.price) });
       Modal.close(); Toast.success('Service recorded'); this.applyFilter();
     }});
   },
@@ -150,7 +150,7 @@ const TransactionsPage = {
     const t = this.data.find(x => x.id === id);
     Modal.show({ title: 'Edit Transaction', size: 'sm', body: this._formHtml(t), onSave: async () => {
       const data = Modal.getFormData();
-      await API.put(`/transactions/${id}`, { ...data, price: Number(data.price), discount: 0, final_amount: Number(data.price) });
+      await API.put(`/transactions/${id}`, { ...data, price: parseAmountInput(data.price), discount: 0, final_amount: parseAmountInput(data.price) });
       Modal.close(); Toast.success('Updated'); this.applyFilter();
     }});
   },

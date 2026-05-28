@@ -103,7 +103,7 @@ const ClientsPage = {
           </select>
         </div>
         <div class="form-group"><label>Start Date</label><input name="start_date" type="date" value="${today()}"></div>
-        <div class="form-group"><label>Monthly Amount</label><input name="amount" type="number" step="0.01" min="0" id="veh-amount" placeholder="0.00"></div>
+        <div class="form-group"><label>Monthly Amount</label><input name="amount" type="text" inputmode="numeric" id="veh-amount" placeholder="0"></div>
         <input type="hidden" name="currency" id="veh-currency" value="USD">
       </div>
     </form>`, onSave: async () => {
@@ -111,7 +111,7 @@ const ClientsPage = {
       const data = Modal.getFormData();
       if (!data.plate_number) throw new Error('Plate number is required');
       data.plate_number = data.plate_number.toUpperCase();
-      await API.post(`/clients/${clientId}/vehicles`, { ...data, amount: Number(data.amount) || 0 });
+      await API.post(`/clients/${clientId}/vehicles`, { ...data, amount: parseAmountInput(data.amount) });
       Modal.close(); Toast.success('Vehicle added'); Router.navigate('clients');
     }});
     // Auto-fill amount and currency from plan
@@ -119,8 +119,8 @@ const ClientsPage = {
       document.getElementById('veh-plan')?.addEventListener('change', e => {
         const plan = this.plans.find(p => p.id == e.target.value);
         if (plan) {
-          document.getElementById('veh-amount').value = plan.price;
           document.getElementById('veh-currency').value = plan.currency || 'USD';
+          document.getElementById('veh-amount').value = fmtAmountInput(plan.price, plan.currency || 'USD');
         }
       });
     }, 50);
@@ -206,7 +206,7 @@ const ClientsPage = {
           <select name="subscription_plan_id"><option value="">— No Plan —</option>${planOpts}</select>
         </div>
         <div class="form-group"><label>Start Date</label><input name="start_date" type="date" value="${v.start_date || ''}"></div>
-        <div class="form-group"><label>Monthly Amount</label><input name="amount" type="number" step="0.01" value="${v.amount || 0}" id="edit-veh-amount"></div>
+        <div class="form-group"><label>Monthly Amount</label><input name="amount" type="text" inputmode="numeric" value="${fmtAmountInput(v.amount, v.currency)}" id="edit-veh-amount"></div>
         <input type="hidden" name="currency" id="edit-veh-currency" value="${escHtml(v.currency || 'USD')}">
         <div class="form-group"><label>Status</label>
           <select name="status">
@@ -221,7 +221,7 @@ const ClientsPage = {
       const data = Modal.getFormData();
       await Promise.all([
         API.put(`/clients/${v.client_id}`, { full_name: data.c_full_name, mobile: data.c_mobile, notes: data.c_notes }),
-        API.put(`/clients/vehicles/${vehicleId}`, { plate_number: data.plate_number, vehicle_type: data.vehicle_type, vehicle_model: data.vehicle_model, subscription_plan_id: data.subscription_plan_id, start_date: data.start_date, amount: Number(data.amount), currency: data.currency || 'USD', status: data.status })
+        API.put(`/clients/vehicles/${vehicleId}`, { plate_number: data.plate_number, vehicle_type: data.vehicle_type, vehicle_model: data.vehicle_model, subscription_plan_id: data.subscription_plan_id, start_date: data.start_date, amount: parseAmountInput(data.amount), currency: data.currency || 'USD', status: data.status })
       ]);
       Modal.close(); Toast.success('Client & vehicle updated'); Router.navigate('clients');
     }});
@@ -229,8 +229,8 @@ const ClientsPage = {
       document.querySelector('[name=subscription_plan_id]')?.addEventListener('change', e => {
         const plan = this.plans.find(p => p.id == e.target.value);
         if (plan) {
-          document.getElementById('edit-veh-amount').value = plan.price;
           document.getElementById('edit-veh-currency').value = plan.currency || 'USD';
+          document.getElementById('edit-veh-amount').value = fmtAmountInput(plan.price, plan.currency || 'USD');
         }
       });
     }, 50);

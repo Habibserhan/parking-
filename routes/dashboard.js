@@ -180,14 +180,16 @@ router.get('/details', authenticate, async (req, res) => {
     }
 
     if (type === 'currently-parked') {
+      const filterStatus = req.query.parking_status; // 'parked' | 'completed' | undefined
       let q = sb.from('daily_parking')
-        .select('plate_number, vehicle_type, entry_time, exit_time, parking_status, notes, third_party_company')
+        .select('plate_number, vehicle_type, entry_time, exit_time, parking_status, notes, third_party_company, card_number')
         .order('entry_time', { ascending: false });
-      if (all) {
+      if (filterStatus) {
+        q = q.eq('parking_status', filterStatus);
+      } else if (all) {
         q = q.eq('parking_status', 'parked');
-      } else {
-        q = q.gte('entry_time', dayStart).lte('entry_time', dayEnd);
       }
+      if (!all) q = q.gte('entry_time', dayStart).lte('entry_time', dayEnd);
       const { data } = await q;
       return res.json(data || []);
     }

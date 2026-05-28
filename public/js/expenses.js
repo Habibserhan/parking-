@@ -85,7 +85,7 @@ const ExpensesPage = {
       </div>
       <div class="form-group"><label>Date *</label><input name="expense_date" type="date" required value="${e.expense_date || today()}"></div>
       <div class="form-group" style="grid-column:1/-1"><label>Title *</label><input name="title" required value="${escHtml(e.title || '')}" placeholder="Expense description"></div>
-      <div class="form-group"><label>Amount *</label><input name="amount" type="number" step="0.01" min="0" required value="${e.amount || ''}"></div>
+      <div class="form-group"><label>Amount *</label><input name="amount" type="text" inputmode="numeric" required value="${fmtAmountInput(e.amount, e.currency)}"></div>
       <div class="form-group"><label>Currency</label>${currencySelect('currency', e.currency)}</div>
       <div class="form-group"><label>Paid To</label><input name="paid_to" value="${escHtml(e.paid_to || '')}" placeholder="Vendor / person"></div>
       <div class="form-group"><label>Payment Method</label>
@@ -118,7 +118,7 @@ const ExpensesPage = {
     Modal.show({ title: 'Add Expense', body: this._formHtml(), onSave: async () => {
       if (!Modal.validate()) throw new Error('Please fill required fields');
       const data = Modal.getFormData();
-      await API.post('/expenses', { ...data, amount: Number(data.amount) });
+      await API.post('/expenses', { ...data, amount: parseAmountInput(data.amount) });
       Modal.close(); Toast.success('Expense added'); Router.navigate('expenses');
     }});
   },
@@ -128,7 +128,7 @@ const ExpensesPage = {
     Modal.show({ title: 'Edit Expense', body: this._formHtml(e), onSave: async () => {
       if (!Modal.validate()) throw new Error('Please fill required fields');
       const data = Modal.getFormData();
-      await API.put(`/expenses/${id}`, { ...data, amount: Number(data.amount) });
+      await API.put(`/expenses/${id}`, { ...data, amount: parseAmountInput(data.amount) });
       Modal.close(); Toast.success('Expense updated'); Router.navigate('expenses');
     }});
   },
