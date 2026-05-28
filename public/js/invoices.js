@@ -7,6 +7,7 @@ const InvoicesPage = {
   clients: [],
   vehicles: [],
   plans: [],
+  _currency: 'USD',
 
   async render() {
     [this.data, this.clients, this.vehicles, this.plans] = await Promise.all([
@@ -19,6 +20,13 @@ const InvoicesPage = {
       <div class="page-header">
         <div class="page-title"><h2>Invoices</h2><p>Manage subscription billing and payments</p></div>
         <div class="page-actions">
+          <div style="display:flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;height:38px">
+            <button id="inv-btn-usd" onclick="InvoicesPage.setCurrency('USD')"
+              style="padding:0 14px;border:none;background:${this._currency==='USD'?'var(--primary)':'transparent'};color:${this._currency==='USD'?'#fff':'var(--text-muted)'};font-weight:700;cursor:pointer;font-size:13px;transition:.15s">$ USD</button>
+            <button id="inv-btn-lbp" onclick="InvoicesPage.setCurrency('LBP')"
+              style="padding:0 14px;border:none;background:${this._currency==='LBP'?'var(--primary)':'transparent'};color:${this._currency==='LBP'?'#fff':'var(--text-muted)'};font-weight:700;cursor:pointer;font-size:13px;transition:.15s">LL LBP</button>
+          </div>
+          <span id="inv-total" class="badge badge-info" style="font-size:14px;padding:8px 14px">${this._fmtTotal(this.data)}</span>
           ${Auth.isAdmin() ? `
             <button class="btn btn-outline" onclick="InvoicesPage.generateMonthly()"><i class="fas fa-magic"></i> Generate Monthly</button>
           ` : ''}
@@ -45,6 +53,21 @@ const InvoicesPage = {
     document.getElementById('inv-search').addEventListener('input',  () => this.applyFilter());
     document.getElementById('inv-month').addEventListener('change',  () => this.applyFilter());
     document.getElementById('inv-status').addEventListener('change', () => this.applyFilter());
+  },
+
+  _fmtTotal(data) {
+    const cur = this._currency;
+    return fmtRaw(sumConverted(data, cur, 'final_amount'), cur);
+  },
+
+  setCurrency(cur) {
+    this._currency = cur;
+    const uBtn = document.getElementById('inv-btn-usd');
+    const lBtn = document.getElementById('inv-btn-lbp');
+    if (uBtn) { uBtn.style.background = cur === 'USD' ? 'var(--primary)' : 'transparent'; uBtn.style.color = cur === 'USD' ? '#fff' : 'var(--text-muted)'; }
+    if (lBtn) { lBtn.style.background = cur === 'LBP' ? 'var(--primary)' : 'transparent'; lBtn.style.color = cur === 'LBP' ? '#fff' : 'var(--text-muted)'; }
+    const badge = document.getElementById('inv-total');
+    if (badge) badge.textContent = this._fmtTotal(this.data);
   },
 
   renderTable(rows) {
@@ -197,6 +220,8 @@ const InvoicesPage = {
     if (status) params.set('payment_status', status);
     this.data = await API.get(`/invoices?${params}`);
     document.getElementById('inv-table').innerHTML = this.renderTable(this.data);
+    const badge = document.getElementById('inv-total');
+    if (badge) badge.textContent = this._fmtTotal(this.data);
   },
 
   async printInvoice(id) {

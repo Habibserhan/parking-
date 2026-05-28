@@ -19,10 +19,10 @@ router.get('/', authenticate, async (req, res) => {
 
 router.post('/', authenticate, async (req, res) => {
   try {
-    const { plate_number, vehicle_type, entry_time, notes, third_party_company } = req.body;
+    const { plate_number, vehicle_type, entry_time, notes, third_party_company, card_number } = req.body;
     if (!plate_number || !vehicle_type) return res.status(400).json({ error: 'Plate number and vehicle type required' });
     const { data, error } = await sb.from('daily_parking')
-      .insert({ plate_number: plate_number.toUpperCase(), vehicle_type, entry_time: entry_time || new Date().toISOString(), notes: notes || '', is_third_party: !!third_party_company, third_party_company: third_party_company || null })
+      .insert({ plate_number: plate_number.toUpperCase(), vehicle_type, entry_time: entry_time || new Date().toISOString(), notes: notes || '', is_third_party: !!third_party_company, third_party_company: third_party_company || null, card_number: card_number || null })
       .select('id').single();
     if (error) return res.status(400).json({ error: error.message });
     res.status(201).json({ id: data.id, message: 'Vehicle checked in' });
@@ -31,12 +31,12 @@ router.post('/', authenticate, async (req, res) => {
 
 router.post('/:id/checkout', authenticate, async (req, res) => {
   try {
-    const { amount, payment_status, currency, card_number } = req.body;
+    const { amount, payment_status, currency, card_number, exit_time: reqExitTime } = req.body;
     const { data: entry } = await sb.from('daily_parking').select('*').eq('id', req.params.id).maybeSingle();
     if (!entry) return res.status(404).json({ error: 'Record not found' });
     if (entry.parking_status === 'completed') return res.status(400).json({ error: 'Already checked out' });
 
-    const exit_time = new Date().toISOString();
+    const exit_time = reqExitTime ? new Date(reqExitTime).toISOString() : new Date().toISOString();
     const duration_minutes = Math.round((new Date(exit_time) - new Date(entry.entry_time)) / 60000);
 
     await sb.from('daily_parking').update({
@@ -44,7 +44,8 @@ router.post('/:id/checkout', authenticate, async (req, res) => {
       amount: amount || 0,
       payment_status: payment_status || 'paid',
       parking_status: 'completed',
-      currency: currency || 'USD'
+      currency: currency || 'USD',
+      ...(card_number != null ? { card_number } : {})
     }).eq('id', req.params.id);
     res.json({ message: 'Checked out', duration_minutes });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -52,7 +53,7 @@ router.post('/:id/checkout', authenticate, async (req, res) => {
 
 router.put('/:id', authenticate, async (req, res) => {
   try {
-    const { plate_number, vehicle_type, entry_time, exit_time, amount, payment_status, parking_status, notes, currency, third_party_company } = req.body;
+    const { plate_number, vehicle_type, entry_time, exit_time, amount, payment_status, parking_status, notes, currency, third_party_company, card_number } = req.body;
     await sb.from('daily_parking').update({
       plate_number, vehicle_type, entry_time,
       exit_time: exit_time || null,
@@ -62,7 +63,8 @@ router.put('/:id', authenticate, async (req, res) => {
       notes: notes || '',
       currency: currency || 'USD',
       is_third_party: !!third_party_company,
-      third_party_company: third_party_company || null
+      third_party_company: third_party_company || null,
+      card_number: card_number || null
     }).eq('id', req.params.id);
     res.json({ message: 'Updated' });
   } catch (e) { res.status(500).json({ error: e.message }); }

@@ -101,9 +101,7 @@ const ExpensesPage = {
 
   _fmtTotal(data) {
     const cur = this._currency;
-    const total = data.filter(e => (e.currency || 'USD') === cur)
-                      .reduce((s, e) => s + (Number(e.amount) || 0), 0);
-    return fmtRaw(total, cur);
+    return fmtRaw(sumConverted(data, cur), cur);
   },
 
   setCurrency(cur) {

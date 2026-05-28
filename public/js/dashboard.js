@@ -98,25 +98,11 @@ const DashboardPage = {
     if (this._stats) document.getElementById('stats-grid').innerHTML = this._statCards(this._stats);
   },
 
-  _getLbpRate() {
-    try {
-      const r = JSON.parse(window.appSettings?.custom_rates || '{}');
-      if (r.USD && typeof r.USD === 'object' && r.USD.rate) return Number(r.USD.rate);
-      if (typeof r.LBP === 'number') return r.LBP;
-      return 89500;
-    } catch { return 89500; }
-  },
-
   _fmtByCurrency(byCurrency) {
-    const cur  = this._currency;
-    const rate = this._getLbpRate(); // 1 USD = rate LBP
-    const usd  = (byCurrency || {}).USD || 0;
-    const lbp  = (byCurrency || {}).LBP || 0;
-    if (cur === 'USD') {
-      return fmtRaw(usd + (lbp / rate), 'USD');
-    } else {
-      return fmtRaw(lbp + (usd * rate), 'LBP');
-    }
+    const cur = this._currency;
+    const usd = (byCurrency || {}).USD || 0;
+    const lbp = (byCurrency || {}).LBP || 0;
+    return fmtRaw(convertAmount(usd, 'USD', cur) + convertAmount(lbp, 'LBP', cur), cur);
   },
 
   _statCards(s) {
@@ -129,7 +115,7 @@ const DashboardPage = {
       ${this._card('fa-car',                'cyan',   'Parking Revenue',      this._fmtByCurrency(s.parkingRevenueByCurrency),  period, 'parking-revenue')}
       ${this._card('fa-shower',             'info',   'Services Revenue',     this._fmtByCurrency(s.servicesRevenueByCurrency), period, 'services-revenue')}
       ${this._card('fa-receipt',            'amber',  'Total Expenses',       this._fmtByCurrency(s.expensesByCurrency),        period, 'expenses')}
-      ${this._card('fa-chart-line', (() => { const r=this._getLbpRate(),u=(s.netProfitByCurrency||{}).USD||0,l=(s.netProfitByCurrency||{}).LBP||0; return (this._currency==='USD'?u+l/r:l+u*r)>=0; })() ? 'green' : 'red', 'Net Profit', this._fmtByCurrency(s.netProfitByCurrency), period, 'net-profit')}
+      ${this._card('fa-chart-line', (() => { const np=s.netProfitByCurrency||{},c=this._currency; return (convertAmount(np.USD||0,'USD',c)+convertAmount(np.LBP||0,'LBP',c))>=0; })() ? 'green' : 'red', 'Net Profit', this._fmtByCurrency(s.netProfitByCurrency), period, 'net-profit')}
       ${this._card('fa-users',              'blue',   'Active Subscribers',   s.activeClients,    this._mode === 'all' ? 'All active clients'   : `Active on ${period}`,       'active-subscribers')}
       ${this._card('fa-exclamation-circle', 'amber',  'Unpaid Subscribers',   s.unpaidClients,    this._mode === 'all' ? 'All unpaid invoices'  : `Unpaid — ${period.slice(0,7)}`, 'unpaid-subscribers')}
       ${this._card('fa-parking',            'cyan',   this._mode === 'all' ? 'Currently Parked' : 'Vehicles Parked', s.currentlyParked, this._mode === 'all' ? 'Live — in lot now' : `Entered on ${period}`, 'currently-parked')}
@@ -183,7 +169,7 @@ const DashboardPage = {
       panel.innerHTML = this._panelWrap('Net Profit Breakdown', this._summaryTable([
         { icon: 'fa-dollar-sign', color: 'blue',  label: 'Total Revenue',  value: this._fmtByCurrency(s.totalRevenueByCurrency), type: 'total-revenue' },
         { icon: 'fa-receipt',     color: 'amber', label: 'Total Expenses', value: this._fmtByCurrency(s.expensesByCurrency),     type: 'expenses' },
-      ], { icon: 'fa-chart-line', color: (() => { const r=this._getLbpRate(),u=(s.netProfitByCurrency||{}).USD||0,l=(s.netProfitByCurrency||{}).LBP||0; return (this._currency==='USD'?u+l/r:l+u*r)>=0; })() ? 'green' : 'red', label: 'Net Profit', value: this._fmtByCurrency(s.netProfitByCurrency) }));
+      ], { icon: 'fa-chart-line', color: (() => { const np=s.netProfitByCurrency||{},c=this._currency; return (convertAmount(np.USD||0,'USD',c)+convertAmount(np.LBP||0,'LBP',c))>=0; })() ? 'green' : 'red', label: 'Net Profit', value: this._fmtByCurrency(s.netProfitByCurrency) }));
       return;
     }
 
@@ -238,21 +224,24 @@ const DashboardPage = {
     if (!data.length) return `<div class="empty-state" style="padding:30px"><i class="fas fa-inbox"></i><h4>No records found</h4></div>`;
 
     if (type === 'sub-revenue') return `<table>
-      <thead><tr><th>Client</th><th>Mobile</th><th>Plate</th><th>Plan</th><th>Amount</th></tr></thead>
+      <thead><tr><th>Client</th><th>Mobile</th><th>Plate</th><th>Plan</th><th>Month</th><th>Status</th><th>Amount</th></tr></thead>
       <tbody>${data.map(r => `<tr>
         <td><strong>${escHtml(r.clients?.full_name || '—')}</strong></td>
         <td>${escHtml(r.clients?.mobile || '—')}</td>
         <td>${escHtml(r.client_vehicles?.plate_number || '—')}</td>
         <td>${escHtml(r.subscription_plans?.name || '—')}</td>
-        <td class="fw-bold">${fmtAmt(r.final_amount, r.currency)}</td>
+        <td>${escHtml(r.invoice_month || '—')}</td>
+        <td>${statusBadge(r.payment_status)}</td>
+        <td class="fw-bold">${fmtRaw(r.final_amount, r.currency)}</td>
       </tr>`).join('')}</tbody></table>`;
 
     if (type === 'parking-revenue') return `<table>
-      <thead><tr><th>Plate</th><th>Type</th><th>Company</th><th>Entry</th><th>Exit</th><th>Duration</th><th>Amount</th></tr></thead>
+      <thead><tr><th>Plate</th><th>Type</th><th>Company</th><th>Card #</th><th>Entry</th><th>Exit</th><th>Duration</th><th>Amount</th></tr></thead>
       <tbody>${data.map(r => `<tr>
         <td><strong>${escHtml(r.plate_number)}</strong></td>
         <td>${vehicleBadge(r.vehicle_type)}</td>
         <td>${r.third_party_company ? `<span class="badge badge-purple" style="font-size:10px">${escHtml(r.third_party_company)}</span>` : '<span class="text-muted">—</span>'}</td>
+        <td class="text-muted" style="letter-spacing:1px">${escHtml(r.card_number || '—')}</td>
         <td>${fmtDateTime(r.entry_time)}</td>
         <td>${fmtDateTime(r.exit_time)}</td>
         <td>${fmtDuration(r.duration_minutes)}</td>
@@ -265,7 +254,7 @@ const DashboardPage = {
         <td><strong>${escHtml(r.services?.name || '—')}</strong></td>
         <td>${escHtml(r.clients?.full_name || '—')}</td>
         <td>${fmtDate(r.service_date)}</td>
-        <td class="fw-bold">${fmtAmt(r.final_amount, r.currency)}</td>
+        <td class="fw-bold">${fmtRaw(r.final_amount, r.currency)}</td>
       </tr>`).join('')}</tbody></table>`;
 
     if (type === 'expenses') return `<table>
@@ -276,7 +265,7 @@ const DashboardPage = {
         <td>${fmtDate(r.expense_date)}</td>
         <td>${escHtml(r.paid_to || '—')}</td>
         <td>${escHtml(r.payment_method || '—')}</td>
-        <td class="fw-bold">${fmtAmt(r.amount, r.currency)}</td>
+        <td class="fw-bold">${fmtRaw(r.amount, r.currency)}</td>
       </tr>`).join('')}</tbody></table>`;
 
     if (type === 'active-subscribers') return `<table>

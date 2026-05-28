@@ -137,8 +137,8 @@ const ReportsPage = {
               <td>${escHtml(r.service_name || '—')}</td>
               <td>${escHtml(r.client_name || '—')}</td>
               <td>${escHtml(r.plate_number || '—')}</td>
-              <td>${fmtCurrency(r.price)}</td>
-              <td>${r.discount > 0 ? fmtCurrency(r.discount) : '—'}</td>
+              <td>${fmtRaw(r.price, r.currency)}</td>
+              <td>${r.discount > 0 ? fmtRaw(r.discount, r.currency) : '—'}</td>
               <td class="fw-bold">${fmtRaw(r.final_amount, r.currency)}</td>
               <td>${statusBadge(r.payment_status)}</td>
             </tr>`).join('')}</tbody>

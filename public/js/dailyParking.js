@@ -5,6 +5,7 @@ const DailyParkingPage = {
   title: 'Daily Parking',
   data: [],
   activeTab: 'checkin',
+  _currency: 'USD',
 
   async render() {
     this.data = await API.get('/daily-parking');
@@ -13,7 +14,13 @@ const DailyParkingPage = {
     return `
       <div class="page-header">
         <div class="page-title"><h2>Daily Parking</h2><p>Manage non-subscription vehicle check-ins</p></div>
-        <div class="page-actions" id="dp-header-actions">
+        <div class="page-actions" id="dp-header-actions" style="gap:8px">
+          <div style="display:flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;height:38px">
+            <button id="dp-btn-usd" onclick="DailyParkingPage.setCurrency('USD')"
+              style="padding:0 14px;border:none;background:${this._currency==='USD'?'var(--primary)':'transparent'};color:${this._currency==='USD'?'#fff':'var(--text-muted)'};font-weight:700;cursor:pointer;font-size:13px;transition:.15s">$ USD</button>
+            <button id="dp-btn-lbp" onclick="DailyParkingPage.setCurrency('LBP')"
+              style="padding:0 14px;border:none;background:${this._currency==='LBP'?'var(--primary)':'transparent'};color:${this._currency==='LBP'?'#fff':'var(--text-muted)'};font-weight:700;cursor:pointer;font-size:13px;transition:.15s">LL LBP</button>
+          </div>
           ${this.activeTab === 'checkin' ? `<button class="btn btn-primary" onclick="DailyParkingPage.showCheckIn()"><i class="fas fa-car"></i> Check In</button>` : ''}
         </div>
       </div>
@@ -59,6 +66,7 @@ const DailyParkingPage = {
         <div class="card">
           <div class="card-header">
             <span class="card-title"><i class="fas fa-check-circle text-success" style="margin-right:8px"></i> Completed Records</span>
+            <span id="dp-total" class="badge badge-success" style="font-size:13px;padding:6px 12px">${this._fmtTotal(completed)}</span>
           </div>
           <div class="table-wrap" id="completed-table">${this.renderCompleted(completed)}</div>
         </div>
@@ -71,6 +79,29 @@ const DailyParkingPage = {
     document.getElementById('dp-to').addEventListener('change', () => this.applyFilter());
   },
 
+  // daily_parking.amount is stored ÷ multiplier on save; restore actual amount before converting
+  _fmtTotal(rows) {
+    const cur = this._currency;
+    const paid = rows.filter(r => r.payment_status === 'paid');
+    const total = paid.reduce((sum, r) => {
+      const cfg = _getCurrencyMap()[r.currency || 'USD'] || {};
+      const actual = (Number(r.amount) || 0) * (cfg.multiplier || 1);
+      return sum + convertAmount(actual, r.currency, cur);
+    }, 0);
+    return fmtRaw(total, cur);
+  },
+
+  setCurrency(cur) {
+    this._currency = cur;
+    const uBtn = document.getElementById('dp-btn-usd');
+    const lBtn = document.getElementById('dp-btn-lbp');
+    if (uBtn) { uBtn.style.background = cur === 'USD' ? 'var(--primary)' : 'transparent'; uBtn.style.color = cur === 'USD' ? '#fff' : 'var(--text-muted)'; }
+    if (lBtn) { lBtn.style.background = cur === 'LBP' ? 'var(--primary)' : 'transparent'; lBtn.style.color = cur === 'LBP' ? '#fff' : 'var(--text-muted)'; }
+    const completed = this.data.filter(d => d.parking_status === 'completed');
+    const badge = document.getElementById('dp-total');
+    if (badge) badge.textContent = this._fmtTotal(completed);
+  },
+
   switchTab(tab) {
     this.activeTab = tab;
     document.querySelectorAll('.page-tab-btn').forEach(btn => {
@@ -78,22 +109,28 @@ const DailyParkingPage = {
     });
     document.getElementById('dp-tab-checkin').style.display  = tab === 'checkin'  ? '' : 'none';
     document.getElementById('dp-tab-checkout').style.display = tab === 'checkout' ? '' : 'none';
+    const cur = this._currency;
+    const toggleHtml = `<div style="display:flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;height:38px">
+      <button id="dp-btn-usd" onclick="DailyParkingPage.setCurrency('USD')" style="padding:0 14px;border:none;background:${cur==='USD'?'var(--primary)':'transparent'};color:${cur==='USD'?'#fff':'var(--text-muted)'};font-weight:700;cursor:pointer;font-size:13px;transition:.15s">$ USD</button>
+      <button id="dp-btn-lbp" onclick="DailyParkingPage.setCurrency('LBP')" style="padding:0 14px;border:none;background:${cur==='LBP'?'var(--primary)':'transparent'};color:${cur==='LBP'?'#fff':'var(--text-muted)'};font-weight:700;cursor:pointer;font-size:13px;transition:.15s">LL LBP</button>
+    </div>`;
     const actions = document.getElementById('dp-header-actions');
-    if (actions) actions.innerHTML = tab === 'checkin'
+    if (actions) actions.innerHTML = toggleHtml + (tab === 'checkin'
       ? `<button class="btn btn-primary" onclick="DailyParkingPage.showCheckIn()"><i class="fas fa-car"></i> Check In</button>`
-      : '';
+      : '');
   },
 
   // Check In tab: currently parked — edit/delete only
   renderParked(rows) {
     if (!rows.length) return `<div class="empty-state" style="padding:30px"><i class="fas fa-parking"></i><h4>No vehicles parked</h4><p>Currently the lot is empty.</p></div>`;
     return `<table>
-      <thead><tr><th>Plate</th><th>Vehicle</th><th>Entry Time</th><th>Duration</th><th>Notes</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Plate</th><th>Vehicle</th><th>Entry Time</th><th>Duration</th><th>Card #</th><th>Notes</th><th>Actions</th></tr></thead>
       <tbody>${rows.map(r => `<tr>
         <td><strong>${escHtml(r.plate_number)}</strong>${r.third_party_company ? ` <span class="badge badge-purple" style="font-size:10px">${escHtml(r.third_party_company)}</span>` : ''}</td>
         <td>${vehicleBadge(r.vehicle_type)}</td>
         <td>${fmtDateTime(r.entry_time)}</td>
         <td class="text-muted">${this.liveDuration(r.entry_time)}</td>
+        <td class="text-muted" style="letter-spacing:1px">${escHtml(r.card_number || '—')}</td>
         <td class="text-muted">${escHtml(r.notes || '—')}</td>
         <td class="actions">
           <button class="btn btn-sm btn-outline btn-icon" onclick="DailyParkingPage.showEdit(${r.id})" title="Edit"><i class="fas fa-edit"></i></button>
@@ -107,12 +144,13 @@ const DailyParkingPage = {
   renderPendingCheckout(rows) {
     if (!rows.length) return `<div class="empty-state" style="padding:30px"><i class="fas fa-sign-out-alt"></i><h4>No vehicles pending checkout</h4><p>All vehicles have been checked out.</p></div>`;
     return `<table>
-      <thead><tr><th>Plate</th><th>Vehicle</th><th>Entry Time</th><th>Duration</th><th>Notes</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Plate</th><th>Vehicle</th><th>Entry Time</th><th>Duration</th><th>Card #</th><th>Notes</th><th>Actions</th></tr></thead>
       <tbody>${rows.map(r => `<tr>
         <td><strong>${escHtml(r.plate_number)}</strong>${r.third_party_company ? ` <span class="badge badge-purple" style="font-size:10px">${escHtml(r.third_party_company)}</span>` : ''}</td>
         <td>${vehicleBadge(r.vehicle_type)}</td>
         <td>${fmtDateTime(r.entry_time)}</td>
         <td class="text-muted">${this.liveDuration(r.entry_time)}</td>
+        <td class="text-muted" style="letter-spacing:1px">${escHtml(r.card_number || '—')}</td>
         <td class="text-muted">${escHtml(r.notes || '—')}</td>
         <td class="actions">
           <button class="btn btn-sm btn-success" onclick="DailyParkingPage.showCheckOut(${r.id})"><i class="fas fa-sign-out-alt"></i> Check Out</button>
@@ -126,13 +164,14 @@ const DailyParkingPage = {
   renderCompleted(rows) {
     if (!rows.length) return `<div class="empty-state" style="padding:30px"><i class="fas fa-history"></i><h4>No completed records</h4><p>Completed records will appear here.</p></div>`;
     return `<table>
-      <thead><tr><th>Plate</th><th>Vehicle</th><th>Entry</th><th>Exit</th><th>Duration</th><th>Amount</th><th>Payment</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Plate</th><th>Vehicle</th><th>Entry</th><th>Exit</th><th>Duration</th><th>Card #</th><th>Amount</th><th>Payment</th><th>Actions</th></tr></thead>
       <tbody>${rows.map(r => `<tr>
         <td><strong>${escHtml(r.plate_number)}</strong>${r.third_party_company ? ` <span class="badge badge-purple" style="font-size:10px">${escHtml(r.third_party_company)}</span>` : ''}</td>
         <td>${vehicleBadge(r.vehicle_type)}</td>
         <td>${fmtDateTime(r.entry_time)}</td>
         <td>${fmtDateTime(r.exit_time)}</td>
         <td>${fmtDuration(r.duration_minutes)}</td>
+        <td class="text-muted" style="letter-spacing:1px">${escHtml(r.card_number || '—')}</td>
         <td class="fw-bold">${fmtAmt(r.amount, r.currency)}</td>
         <td>${statusBadge(r.payment_status)}</td>
         <td class="actions">
@@ -157,6 +196,7 @@ const DailyParkingPage = {
           <select name="vehicle_type" required>${vehicleTypeOptions('car')}</select>
         </div>
         <div class="form-group" style="grid-column:1/-1"><label>Entry Time</label><input name="entry_time" type="datetime-local" value="${now}"></div>
+        <div class="form-group" style="grid-column:1/-1"><label><i class="fas fa-credit-card" style="color:var(--primary);margin-right:6px"></i>Card Number</label><input name="card_number" placeholder="Optional — enter card number" style="letter-spacing:1px"></div>
         <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea name="notes" placeholder="Optional notes…"></textarea></div>
         <div class="form-group" style="grid-column:1/-1"><label><i class="fas fa-building" style="color:var(--primary);margin-right:6px"></i>Third Party Company</label>
           <select name="third_party_company"><option value="">— Not Third Party —</option>${(() => { try { const p = JSON.parse(window.appSettings?.custom_rates||'{}'); return (Array.isArray(p.__thirdParties)?p.__thirdParties:[]).map(c=>`<option value="${escHtml(c.name)}">${escHtml(c.name)}</option>`).join(''); } catch { return ''; } })()}</select>
@@ -173,59 +213,89 @@ const DailyParkingPage = {
 
   showCheckOut(id) {
     const record = this.data.find(r => r.id === id);
-    const mins = Math.round((Date.now() - new Date(record?.entry_time)) / 60000);
+    const exitNow = nowLebanon();
+    const mins = Math.round((new Date(exitNow) - new Date(record?.entry_time)) / 60000);
 
-    let autoCurrency, multiplier, inputAmount, calcNote;
+    let autoCurrency, inputAmount, calcNote;
     if (record?.third_party_company) {
       try {
         const parsed = JSON.parse(window.appSettings?.custom_rates || '{}');
         const company = (parsed.__thirdParties || []).find(c => c.name === record.third_party_company);
         if (company) {
           autoCurrency = company.currency || 'USD';
-          multiplier = (_getCurrencyMap()[autoCurrency] || {}).multiplier || 1;
           inputAmount = Number(company.rate);
-          calcNote = `<div style="margin-top:6px;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--text-muted)"><i class="fas fa-building" style="margin-right:4px"></i>${escHtml(company.name)} — ${fmtRaw(company.rate, autoCurrency)} / month (flat rate)</div>`;
+          calcNote = `<div id="co-calc-note" style="margin-top:6px;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--text-muted)"><i class="fas fa-building" style="margin-right:4px"></i>${escHtml(company.name)} — ${fmtRaw(company.rate, autoCurrency)} / month (flat rate)</div>`;
         } else {
-          autoCurrency = 'USD'; multiplier = 1; inputAmount = 0;
-          calcNote = `<div style="margin-top:6px;font-size:12px;color:var(--text-muted)">Third party company not found — enter manually</div>`;
+          autoCurrency = 'USD'; inputAmount = 0;
+          calcNote = `<div id="co-calc-note" style="margin-top:6px;font-size:12px;color:var(--text-muted)">Third party company not found — enter manually</div>`;
         }
       } catch {
-        autoCurrency = 'USD'; multiplier = 1; inputAmount = 0;
-        calcNote = `<div style="margin-top:6px;font-size:12px;color:var(--text-muted)">Enter amount manually</div>`;
+        autoCurrency = 'USD'; inputAmount = 0;
+        calcNote = `<div id="co-calc-note" style="margin-top:6px;font-size:12px;color:var(--text-muted)">Enter amount manually</div>`;
       }
     } else {
       const calc = calcParkingAmount(record?.vehicle_type, mins);
       autoCurrency = calc ? calc.currency : 'USD';
-      multiplier = (_getCurrencyMap()[autoCurrency] || {}).multiplier || 1;
-      inputAmount = calc ? Math.round(calc.amount * multiplier) : 0;
+      inputAmount = calc ? calc.amount : 0;
       calcNote = calc
-        ? `<div style="margin-top:6px;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--text-muted)"><i class="fas fa-calculator" style="margin-right:4px"></i>${fmtDuration(mins)} → tier ${calc.tier.from}h–${calc.tier.to != null ? calc.tier.to + 'h' : '∞'} = ${fmtAmt(calc.amount, calc.currency)}</div>`
-        : `<div style="margin-top:6px;font-size:12px;color:var(--text-muted)">No rate tier set — enter manually</div>`;
+        ? `<div id="co-calc-note" style="margin-top:6px;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--text-muted)"><i class="fas fa-calculator" style="margin-right:4px"></i>${fmtDuration(mins)} → tier ${calc.tier.from}h–${calc.tier.to != null ? calc.tier.to + 'h' : '∞'} = ${fmtRaw(calc.amount, calc.currency)}</div>`
+        : `<div id="co-calc-note" style="margin-top:6px;font-size:12px;color:var(--text-muted)">No rate tier set — enter manually</div>`;
     }
     Modal.show({ title: `Check Out — ${record?.plate_number}`, body: `
       <div style="background:var(--bg);border-radius:8px;padding:14px;margin-bottom:16px">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div><small class="text-muted">Entry</small><div>${fmtDateTime(record?.entry_time)}</div></div>
-          <div><small class="text-muted">Duration</small><div>${fmtDuration(mins)}</div></div>
+          <div><small class="text-muted">Duration</small><div id="co-duration">${fmtDuration(mins)}</div></div>
         </div>
       </div>
       <form id="modal-form">
         <div class="form-row cols-2">
-          <div class="form-group"><label>Amount *</label><input name="amount" type="number" step="1" min="0" required placeholder="0" value="${inputAmount}">${calcNote}</div>
+          <div class="form-group" style="grid-column:1/-1">
+            <label>Exit Time</label>
+            <input name="exit_time" id="co-exit-time" type="datetime-local" value="${exitNow}"
+              onchange="DailyParkingPage._onExitTimeChange(${id})">
+          </div>
+          <div class="form-group" style="grid-column:1/-1"><label><i class="fas fa-credit-card" style="color:var(--primary);margin-right:6px"></i>Card Number</label><input name="card_number" value="${escHtml(record?.card_number || '')}" placeholder="Optional — enter card number" style="letter-spacing:1px"></div>
+          <div class="form-group"><label>Amount *</label><input name="amount" id="co-amount" type="number" step="1" min="0" required placeholder="0" value="${inputAmount}">${calcNote}</div>
           <div class="form-group"><label>Currency</label>${currencySelect('currency', autoCurrency)}</div>
           <div class="form-group"><label>Payment Status</label>
             <select name="payment_status"><option value="paid">Paid</option><option value="unpaid">Unpaid</option></select>
           </div>
-          ${record?.third_party_company ? `<div class="form-group" style="grid-column:1/-1"><label><i class="fas fa-credit-card" style="color:var(--primary);margin-right:6px"></i>Card Number</label><input name="card_number" placeholder="Enter card number…" style="letter-spacing:1px"></div>` : ''}
         </div>
       </form>`, saveLabel: 'Check Out', onSave: async () => {
       if (!Modal.validate()) throw new Error('Amount is required');
       const data = Modal.getFormData();
       const saveCfg = _getCurrencyMap()[data.currency] || {};
       const saveMult = saveCfg.multiplier || 1;
-      await API.post(`/daily-parking/${id}/checkout`, { amount: Number(data.amount) / saveMult, payment_status: data.payment_status, currency: data.currency || 'USD', card_number: data.card_number || null });
+      await API.post(`/daily-parking/${id}/checkout`, {
+        amount: Number(data.amount) / saveMult,
+        payment_status: data.payment_status,
+        currency: data.currency || 'USD',
+        card_number: data.card_number || null,
+        exit_time: data.exit_time || null
+      });
       Modal.close(); Toast.success('Vehicle checked out'); Router.navigate('daily-parking');
     }});
+  },
+
+  _onExitTimeChange(id) {
+    const record = this.data.find(r => r.id === id);
+    if (!record) return;
+    const exitVal = document.getElementById('co-exit-time')?.value;
+    if (!exitVal) return;
+    const mins = Math.round((new Date(exitVal) - new Date(record.entry_time)) / 60000);
+    if (mins < 0) return;
+    const durEl = document.getElementById('co-duration');
+    if (durEl) durEl.textContent = fmtDuration(mins);
+    if (!record.third_party_company) {
+      const calc = calcParkingAmount(record.vehicle_type, mins);
+      const amountEl = document.getElementById('co-amount');
+      const noteEl   = document.getElementById('co-calc-note');
+      if (calc && amountEl) amountEl.value = calc.amount;
+      if (noteEl) noteEl.innerHTML = calc
+        ? `<i class="fas fa-calculator" style="margin-right:4px"></i>${fmtDuration(mins)} → tier ${calc.tier.from}h–${calc.tier.to != null ? calc.tier.to + 'h' : '∞'} = ${fmtRaw(calc.amount, calc.currency)}`
+        : 'No rate tier set — enter manually';
+    }
   },
 
   showEdit(id) {
@@ -246,6 +316,7 @@ const DailyParkingPage = {
           <select name="parking_status"><option value="parked" ${r.parking_status==='parked'?'selected':''}>Parked</option><option value="completed" ${r.parking_status==='completed'?'selected':''}>Completed</option></select>
         </div>
         <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea name="notes">${escHtml(r.notes || '')}</textarea></div>
+        <div class="form-group" style="grid-column:1/-1"><label><i class="fas fa-credit-card" style="color:var(--primary);margin-right:6px"></i>Card Number</label><input name="card_number" value="${escHtml(r.card_number || '')}" placeholder="Optional" style="letter-spacing:1px"></div>
       </div>
     </form>`, onSave: async () => {
       const data = Modal.getFormData();
@@ -268,6 +339,8 @@ const DailyParkingPage = {
     document.getElementById('parked-table').innerHTML           = this.renderParked(parked);
     document.getElementById('pending-checkout-table').innerHTML = this.renderPendingCheckout(parked);
     document.getElementById('completed-table').innerHTML        = this.renderCompleted(completed);
+    const totalBadge = document.getElementById('dp-total');
+    if (totalBadge) totalBadge.textContent = this._fmtTotal(completed);
   },
 
   clearFilter() {

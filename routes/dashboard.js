@@ -18,10 +18,10 @@ router.get('/', authenticate, async (req, res) => {
     const dayEnd    = `${dateTo}T23:59:59`;
     const all = mode === 'all';
 
-    let parkQ      = sb.from('daily_parking').select('amount, currency').eq('payment_status', 'paid');
+    let parkQ      = sb.from('daily_parking').select('amount, currency').eq('parking_status', 'completed').eq('payment_status', 'paid');
     let svcQ       = sb.from('service_transactions').select('final_amount, currency').eq('payment_status', 'paid');
     let expQ       = sb.from('expenses').select('amount, currency');
-    let invQ       = sb.from('invoices').select('final_amount, currency').eq('payment_status', 'paid');
+    let invQ       = sb.from('invoices').select('final_amount, currency');
     let unpaidInvQ = sb.from('invoices').select('id').eq('payment_status', 'unpaid');
 
     if (!all) {
@@ -46,7 +46,7 @@ router.get('/', authenticate, async (req, res) => {
       thirdPartyQ = thirdPartyQ.gte('entry_time', dayStart).lte('entry_time', dayEnd);
     }
 
-    const [paidInvResult, parkResult, svcResult, expResult, activeVehicleResult, unpaidInvResult, parkedResult, thirdPartyResult] = await Promise.all([
+    const [paidInvResult, parkResult, svcResult, expResult, activeVehicleResult, unpaidInvResult, parkedResult, thirdPartyResult, settingsResult] = await Promise.all([
       invQ,
       parkQ,
       svcQ,
@@ -54,8 +54,20 @@ router.get('/', authenticate, async (req, res) => {
       activeQ,
       unpaidInvQ,
       parkedQ,
-      thirdPartyQ
+      thirdPartyQ,
+      sb.from('settings').select('custom_rates').eq('id', 1).maybeSingle()
     ]);
+
+    // Build currency multiplier map from settings (daily_parking.amount is stored ÷ multiplier)
+    let currencyMultipliers = { LBP: 1000 };
+    try {
+      const cr = JSON.parse(settingsResult.data?.custom_rates || '{}');
+      Object.entries(cr).forEach(([k, v]) => {
+        if (!k.startsWith('__') && typeof v === 'object' && v !== null && v.multiplier) {
+          currencyMultipliers[k] = v.multiplier;
+        }
+      });
+    } catch {}
 
     const byCur = (arr, key) => arr.reduce((acc, r) => {
       const cur = r.currency || 'USD';
@@ -63,8 +75,14 @@ router.get('/', authenticate, async (req, res) => {
       return acc;
     }, {});
 
+    // daily_parking.amount is stored as base units (÷ multiplier on save) — normalize to raw values
+    const normalizedParkingData = (parkResult.data || []).map(r => ({
+      currency: r.currency,
+      amount: (Number(r.amount) || 0) * (currencyMultipliers[r.currency || 'USD'] || 1)
+    }));
+
     const subRevenueByCurrency      = byCur(paidInvResult.data || [], 'final_amount');
-    const parkingRevenueByCurrency  = byCur(parkResult.data    || [], 'amount');
+    const parkingRevenueByCurrency  = byCur(normalizedParkingData, 'amount');
     const servicesRevenueByCurrency = byCur(svcResult.data     || [], 'final_amount');
     const expensesByCurrency        = byCur(expResult.data     || [], 'amount');
 
@@ -105,8 +123,8 @@ router.get('/details', authenticate, async (req, res) => {
 
     if (type === 'sub-revenue') {
       let q = sb.from('invoices')
-        .select('invoice_number, final_amount, currency, invoice_month, clients(full_name, mobile), client_vehicles(plate_number, vehicle_type), subscription_plans(name)')
-        .eq('payment_status', 'paid').order('final_amount', { ascending: false });
+        .select('invoice_number, final_amount, currency, invoice_month, payment_status, clients(full_name, mobile), client_vehicles(plate_number, vehicle_type), subscription_plans(name)')
+        .order('final_amount', { ascending: false });
       if (!all) q = q.gte('invoice_month', monthFrom).lte('invoice_month', monthTo);
       const { data } = await q;
       return res.json(data || []);
@@ -114,8 +132,8 @@ router.get('/details', authenticate, async (req, res) => {
 
     if (type === 'parking-revenue') {
       let q = sb.from('daily_parking')
-        .select('plate_number, vehicle_type, entry_time, exit_time, duration_minutes, amount, currency, third_party_company')
-        .eq('payment_status', 'paid').order('entry_time', { ascending: false });
+        .select('plate_number, vehicle_type, entry_time, exit_time, duration_minutes, amount, currency, third_party_company, card_number')
+        .eq('parking_status', 'completed').eq('payment_status', 'paid').order('entry_time', { ascending: false });
       if (!all) q = q.gte('entry_time', dayStart).lte('entry_time', dayEnd);
       const { data } = await q;
       return res.json(data || []);

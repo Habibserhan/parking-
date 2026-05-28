@@ -261,7 +261,37 @@ function fmtRaw(amount, currency) {
   }).format(n);
 }
 
-// Build <select> for per-record currency using the active currency list
+// ---- Shared currency conversion helpers ----
+
+// Returns the LBP exchange rate (1 USD = N LBP) from settings, fallback 89500
+function getLbpRate() {
+  try {
+    const r = JSON.parse(window.appSettings?.custom_rates || '{}');
+    if (r.USD && typeof r.USD === 'object' && r.USD.rate) return Number(r.USD.rate);
+    if (typeof r.LBP === 'number') return r.LBP;
+  } catch {}
+  return 89500;
+}
+
+// Convert a raw amount from one currency to another (USD ↔ LBP)
+function convertAmount(amount, fromCurrency, toCurrency) {
+  const value = Number(amount) || 0;
+  const from  = String(fromCurrency || 'USD').toUpperCase();
+  const to    = String(toCurrency   || 'USD').toUpperCase();
+  if (from === to) return value;
+  const rate = getLbpRate();
+  if (from === 'USD' && to === 'LBP') return value * rate;
+  if (from === 'LBP' && to === 'USD') return value / rate;
+  return value; // unsupported pair — return as-is
+}
+
+// Sum records after converting each record's amount to selectedCurrency
+function sumConverted(records, selectedCurrency, amountField = 'amount', currencyField = 'currency') {
+  return records.reduce((total, r) =>
+    total + convertAmount(r[amountField], r[currencyField], selectedCurrency), 0);
+}
+
+// ---- Build <select> for per-record currency using the active currency list
 function currencySelect(name, selected) {
   const sel = selected || 'USD';
   const map = _getCurrencyMap();
