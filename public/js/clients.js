@@ -65,7 +65,10 @@ const ClientsPage = {
           <td><strong>${escHtml(v.full_name)}</strong></td>
           <td>${escHtml(v.mobile || '—')}</td>
           <td><strong>${escHtml(v.plate_number)}</strong></td>
-          <td>${vehicleBadge(v.vehicle_type)}</td>
+          <td>
+            ${vehicleBadge(v.vehicle_type)}
+            ${v.vehicle_model ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${escHtml(v.vehicle_model)}</div>` : ''}
+          </td>
           <td>${escHtml(v.plan_name || '—')}</td>
           <td>${fmtDate(v.start_date)}</td>
           <td>${fmtRaw(v.amount, v.currency)}</td>
