@@ -23,6 +23,7 @@ app.use('/api/daily-parking', require('./routes/dailyParking'));
 app.use('/api/services',      require('./routes/services'));
 app.use('/api/transactions',  require('./routes/transactions'));
 app.use('/api/expenses',      require('./routes/expenses'));
+app.use('/api/employees',     require('./routes/employees'));
 app.use('/api/invoices',      require('./routes/invoices'));
 app.use('/api/reports',       require('./routes/reports'));
 app.use('/api/settings',      require('./routes/settings'));

@@ -5,12 +5,16 @@ const ExpensesPage = {
   title: 'Expenses',
   adminOnly: true,
   data: [],
+  employees: [],
   _currency: 'USD',
 
-  TYPES: ['salary', 'rent', 'electricity', 'water', 'maintenance', 'other'],
+  TYPES: ['salary', 'salary_advance', 'rent', 'electricity', 'water', 'maintenance', 'other'],
 
   async render() {
-    this.data = await API.get('/expenses');
+    [this.data, this.employees] = await Promise.all([
+      API.get('/expenses'),
+      API.get('/employees?status=active').catch(() => [])
+    ]);
     return `
       <div class="page-header">
         <div class="page-title"><h2>Expenses</h2><p>Track business expenses</p></div>
@@ -51,16 +55,18 @@ const ExpensesPage = {
 
   renderTable(rows) {
     if (!rows.length) return `<div class="empty-state"><i class="fas fa-receipt"></i><h4>No expenses found</h4><p>Record business expenses here.</p></div>`;
+    const salaryTypes = new Set(['salary', 'salary_advance']);
     return `<table>
-      <thead><tr><th>Date</th><th>Type</th><th>Title</th><th>Amount</th><th>Paid To</th><th>Method</th><th>Notes</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Date</th><th>Type</th><th>Title</th><th>Employee</th><th>Month</th><th>Amount</th><th>Paid To</th><th>Method</th><th>Actions</th></tr></thead>
       <tbody>${rows.map(e => `<tr>
         <td>${fmtDate(e.expense_date)}</td>
-        <td><span class="badge badge-orange">${escHtml(e.expense_type)}</span></td>
+        <td><span class="badge badge-orange" style="white-space:nowrap">${escHtml(e.expense_type.replace('_', ' '))}</span></td>
         <td><strong>${escHtml(e.title)}</strong></td>
+        <td>${escHtml(e.employee_name || '—')}</td>
+        <td class="text-muted">${e.salary_month ? escHtml(e.salary_month) : '—'}</td>
         <td class="fw-bold text-danger">${fmtRaw(e.amount, e.currency)}</td>
         <td>${escHtml(e.paid_to || '—')}</td>
         <td>${escHtml(e.payment_method || '—')}</td>
-        <td class="text-muted">${escHtml(e.notes || '—')}</td>
         <td class="actions">
           <button class="btn btn-sm btn-outline btn-icon" onclick="ExpensesPage.showEdit(${e.id})"><i class="fas fa-edit"></i></button>
           <button class="btn btn-sm btn-outline btn-icon" onclick="ExpensesPage.deleteRecord(${e.id})"><i class="fas fa-trash"></i></button>
@@ -76,11 +82,15 @@ const ExpensesPage = {
   },
 
   _formHtml(e = {}) {
+    const isSalary    = e.expense_type === 'salary' || e.expense_type === 'salary_advance';
+    const empOpts     = this.employees.map(emp =>
+      `<option value="${emp.id}" ${String(e.employee_id) === String(emp.id) ? 'selected' : ''}>${escHtml(emp.name)}</option>`
+    ).join('');
     return `<form id="modal-form"><div class="form-row cols-2">
       <div class="form-group"><label>Expense Type *</label>
-        <select name="expense_type" required>
+        <select name="expense_type" required onchange="ExpensesPage._onTypeChange()">
           <option value="">Select type</option>
-          ${this.TYPES.map(t => `<option value="${t}" ${e.expense_type===t?'selected':''}>${t.charAt(0).toUpperCase()+t.slice(1)}</option>`).join('')}
+          ${this.TYPES.map(t => `<option value="${t}" ${e.expense_type===t?'selected':''}>${t.replace('_',' ').replace(/\b\w/g, c=>c.toUpperCase())}</option>`).join('')}
         </select>
       </div>
       <div class="form-group"><label>Date *</label><input name="expense_date" type="date" required value="${e.expense_date || today()}"></div>
@@ -95,8 +105,44 @@ const ExpensesPage = {
           <option value="other" ${e.payment_method==='other'?'selected':''}>Other</option>
         </select>
       </div>
+      <!-- Salary-specific fields -->
+      <div id="exp-salary-section" style="grid-column:1/-1${isSalary ? '' : ';display:none'}">
+        <div style="border-top:1.5px solid var(--border);padding-top:14px;margin-top:4px">
+          <div style="font-size:12px;font-weight:700;text-transform:uppercase;color:var(--primary);letter-spacing:.06em;margin-bottom:10px">
+            <i class="fas fa-user-tie" style="margin-right:6px"></i>Salary Details
+          </div>
+          <div class="form-row cols-2">
+            <div class="form-group"><label>Employee</label>
+              <select name="employee_id" id="exp-employee-sel"
+                onchange="ExpensesPage._onEmployeeChange()">
+                <option value="">Select employee</option>${empOpts}
+              </select>
+            </div>
+            <div class="form-group"><label>Salary Month</label>
+              <input name="salary_month" type="month" value="${e.salary_month || currentMonth()}">
+            </div>
+          </div>
+        </div>
+      </div>
       <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea name="notes">${escHtml(e.notes || '')}</textarea></div>
     </div></form>`;
+  },
+
+  _onTypeChange() {
+    const type = document.querySelector('#modal-form select[name="expense_type"]')?.value;
+    const sec  = document.getElementById('exp-salary-section');
+    if (sec) sec.style.display = (type === 'salary' || type === 'salary_advance') ? '' : 'none';
+  },
+
+  _onEmployeeChange() {
+    const empId = document.getElementById('exp-employee-sel')?.value;
+    const emp   = this.employees.find(e => String(e.id) === String(empId));
+    if (!emp) return;
+    // Auto-fill paid_to and currency from selected employee
+    const paidToEl = document.querySelector('#modal-form input[name="paid_to"]');
+    const curSel   = document.querySelector('#modal-form select[name="currency"]');
+    if (paidToEl && !paidToEl.value) paidToEl.value = emp.name;
+    if (curSel) curSel.value = emp.currency || 'USD';
   },
 
   _fmtTotal(data) {
@@ -118,7 +164,12 @@ const ExpensesPage = {
     Modal.show({ title: 'Add Expense', body: this._formHtml(), onSave: async () => {
       if (!Modal.validate()) throw new Error('Please fill required fields');
       const data = Modal.getFormData();
-      await API.post('/expenses', { ...data, amount: parseAmountInput(data.amount) });
+      await API.post('/expenses', {
+        ...data,
+        amount:      parseAmountInput(data.amount),
+        employee_id: data.employee_id || null,
+        salary_month:data.salary_month || null
+      });
       Modal.close(); Toast.success('Expense added'); Router.navigate('expenses');
     }});
   },
@@ -128,7 +179,12 @@ const ExpensesPage = {
     Modal.show({ title: 'Edit Expense', body: this._formHtml(e), onSave: async () => {
       if (!Modal.validate()) throw new Error('Please fill required fields');
       const data = Modal.getFormData();
-      await API.put(`/expenses/${id}`, { ...data, amount: parseAmountInput(data.amount) });
+      await API.put(`/expenses/${id}`, {
+        ...data,
+        amount:      parseAmountInput(data.amount),
+        employee_id: data.employee_id || null,
+        salary_month:data.salary_month || null
+      });
       Modal.close(); Toast.success('Expense updated'); Router.navigate('expenses');
     }});
   },

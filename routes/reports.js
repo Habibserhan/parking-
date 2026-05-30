@@ -157,6 +157,41 @@ router.get('/tips', authenticate, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+router.get('/salary', authenticate, async (req, res) => {
+  try {
+    const month = req.query.month || new Date().toISOString().slice(0, 7);
+
+    const [{ data: employees }, { data: expenses }] = await Promise.all([
+      sb.from('employees').select('*').order('name'),
+      sb.from('expenses').select('*').eq('salary_month', month).not('employee_id', 'is', null)
+    ]);
+
+    const getProratedSalary = (emp) => {
+      const monthly = Number(emp.monthly_salary) || 0;
+      if (!emp.start_date) return monthly;
+      const startMonth = emp.start_date.slice(0, 7);
+      if (startMonth !== month) return monthly;
+      const [yr, mo]    = month.split('-').map(Number);
+      const daysInMonth = new Date(yr, mo, 0).getDate();
+      const startDay    = parseInt(emp.start_date.split('-')[2], 10);
+      const daysWorked  = daysInMonth - startDay + 1;
+      return Math.round(monthly * daysWorked / daysInMonth * 100) / 100;
+    };
+
+    const report = (employees || []).map(emp => {
+      const effective   = getProratedSalary(emp);
+      const isProrated  = effective !== (Number(emp.monthly_salary) || 0);
+      const empExp      = (expenses || []).filter(e => String(e.employee_id) === String(emp.id));
+      const advances    = empExp.filter(e => e.expense_type === 'salary_advance').reduce((s, e) => s + (Number(e.amount) || 0), 0);
+      const paid        = empExp.filter(e => e.expense_type === 'salary').reduce((s, e) => s + (Number(e.amount) || 0), 0);
+      const remaining   = Math.max(0, effective - advances - paid);
+      return { id: emp.id, name: emp.name, monthly_salary: emp.monthly_salary, effective_salary: effective, is_prorated: isProrated, currency: emp.currency, status: emp.status, start_date: emp.start_date, total_advances: advances, salary_paid: paid, remaining };
+    });
+
+    res.json(report);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 router.get('/expired-subscriptions', authenticate, async (req, res) => {
   try {
     const { data } = await sb.from('client_vehicles')

@@ -469,6 +469,7 @@ const UsersPage = {
       { key: 'services',      label: 'Services',               icon: 'fa-shower' },
       { key: 'transactions',  label: 'Daily Services',         icon: 'fa-soap' },
       { key: 'expenses',      label: 'Expenses',               icon: 'fa-receipt' },
+      { key: 'employees',     label: 'Employee Salaries',      icon: 'fa-user-tie' },
       { key: 'invoices',      label: 'Invoices',               icon: 'fa-file-invoice-dollar' },
       { key: 'unpaid',        label: 'Unpaid Subscriptions',   icon: 'fa-exclamation-circle' },
       { key: 'reports',       label: 'Reports',                icon: 'fa-chart-bar' },

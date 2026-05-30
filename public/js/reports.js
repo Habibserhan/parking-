@@ -19,6 +19,7 @@ const ReportsPage = {
               ['services',   'fas fa-shower',            'Services'],
               ['tips',       'fas fa-hand-holding-usd',  'Tips Revenue'],
               ['expenses',   'fas fa-receipt',           'Expenses'],
+              ['salary',     'fas fa-user-tie',          'Salary Report'],
               ['invoices',   'fas fa-file-invoice',      'Unpaid Invoices'],
               ['partial',    'fas fa-hourglass-half',    'Partial / Remaining'],
               ['clients',    'fas fa-users',             'Active Clients'],
@@ -70,6 +71,7 @@ const ReportsPage = {
         case 'services': await this.renderServices(from, to, el); break;
         case 'tips':     await this.renderTips(from, to, el); break;
         case 'expenses': await this.renderExpenses(from, to, el); break;
+        case 'salary':   await this.renderSalary(from, el); break;
         case 'invoices': await this.renderUnpaidInvoices(el); break;
         case 'partial':  await this.renderPartialInvoices(el); break;
         case 'clients':  await this.renderActiveClients(el); break;
@@ -179,6 +181,68 @@ const ReportsPage = {
               <td style="padding:12px 16px;font-weight:700;color:var(--success)">${fmtCurrency(total)}</td>
             </tr></tfoot>
           </table>` : '<div class="empty-state" style="padding:30px"><i class="fas fa-hand-holding-usd"></i><h4>No tips recorded</h4><p>Tips are recorded when Amount Received exceeds the Service Total.</p></div>'}
+        </div>
+      </div>`;
+  },
+
+  async renderSalary(from, el) {
+    // Use the month from the "from" date (YYYY-MM)
+    const month = (from || today()).slice(0, 7);
+    const rows  = await API.get(`/reports/salary?month=${month}`);
+    this._exportData = rows;
+
+    const totalPayroll  = rows.filter(r => r.status === 'active').reduce((s, r) => s + (Number(r.monthly_salary) || 0), 0);
+    const totalAdvances = rows.reduce((s, r) => s + (r.total_advances || 0), 0);
+    const totalPaid     = rows.reduce((s, r) => s + (r.salary_paid   || 0), 0);
+    const totalRemain   = rows.reduce((s, r) => s + (r.remaining      || 0), 0);
+
+    el.innerHTML = `
+      <div class="stats-grid" style="margin-bottom:16px">
+        <div class="stat-card"><div class="stat-icon purple"><i class="fas fa-money-bill-wave"></i></div><div class="stat-info"><div class="stat-label">Total Payroll</div><div class="stat-value">${fmtCurrency(totalPayroll)}</div></div></div>
+        <div class="stat-card"><div class="stat-icon amber"><i class="fas fa-hand-holding-usd"></i></div><div class="stat-info"><div class="stat-label">Total Advances</div><div class="stat-value">${fmtCurrency(totalAdvances)}</div></div></div>
+        <div class="stat-card"><div class="stat-icon green"><i class="fas fa-check-circle"></i></div><div class="stat-info"><div class="stat-label">Salary Paid</div><div class="stat-value">${fmtCurrency(totalPaid)}</div></div></div>
+        <div class="stat-card"><div class="stat-icon red"><i class="fas fa-clock"></i></div><div class="stat-info"><div class="stat-label">Total Remaining</div><div class="stat-value">${fmtCurrency(totalRemain)}</div></div></div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title"><i class="fas fa-user-tie" style="color:var(--primary);margin-right:8px"></i>Salary Report — ${escHtml(month)}</span>
+          <span class="badge" style="background:var(--primary);color:#fff">${rows.length} employees</span>
+        </div>
+        <div class="table-wrap">
+          ${rows.length ? `<table>
+            <thead><tr>
+              <th>Employee</th><th>Monthly Salary</th><th>Advances</th><th>Salary Paid</th><th>Remaining</th><th>Status</th>
+            </tr></thead>
+            <tbody>${rows.map(r => {
+              const fullyPaid = r.remaining === 0 && (r.salary_paid > 0 || r.total_advances > 0);
+              const salaryCell = r.is_prorated
+                ? `${fmtRaw(r.effective_salary, r.currency)} <span style="font-size:10px;font-weight:600;color:var(--primary);background:#eff6ff;padding:2px 5px;border-radius:8px">Prorated</span><br><span style="font-size:10px;color:var(--text-muted)">Full: ${fmtRaw(r.monthly_salary, r.currency)}</span>`
+                : fmtRaw(r.monthly_salary, r.currency);
+              return `<tr style="${fullyPaid ? 'background:#f0fdf4' : ''}">
+                <td><strong>${escHtml(r.name)}</strong></td>
+                <td class="fw-bold">${salaryCell}</td>
+                <td style="color:${r.total_advances > 0 ? 'var(--warning)' : 'var(--text-muted)'}">
+                  ${r.total_advances > 0 ? fmtRaw(r.total_advances, r.currency) : '—'}
+                </td>
+                <td style="color:${r.salary_paid > 0 ? 'var(--success)' : 'var(--text-muted)'}">
+                  ${r.salary_paid > 0 ? fmtRaw(r.salary_paid, r.currency) : '—'}
+                </td>
+                <td class="fw-bold" style="color:${r.remaining > 0 ? 'var(--danger)' : 'var(--success)'}">
+                  ${r.remaining > 0 ? fmtRaw(r.remaining, r.currency) : '✓ Fully Paid'}
+                </td>
+                <td>${statusBadge(r.status)}</td>
+              </tr>`;
+            }).join('')}
+            </tbody>
+            <tfoot><tr style="background:var(--bg)">
+              <td style="text-align:right;padding:12px 16px;font-weight:700">Totals</td>
+              <td class="fw-bold">${fmtCurrency(totalPayroll)}</td>
+              <td style="color:var(--warning);font-weight:700">${totalAdvances > 0 ? fmtCurrency(totalAdvances) : '—'}</td>
+              <td style="color:var(--success);font-weight:700">${totalPaid > 0 ? fmtCurrency(totalPaid) : '—'}</td>
+              <td style="color:var(--danger);font-weight:700">${totalRemain > 0 ? fmtCurrency(totalRemain) : '✓'}</td>
+              <td></td>
+            </tr></tfoot>
+          </table>` : '<div class="empty-state" style="padding:30px"><i class="fas fa-user-tie"></i><h4>No employees found</h4><p>Add employees in the Employee Salaries page.</p></div>'}
         </div>
       </div>`;
   },
