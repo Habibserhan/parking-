@@ -43,7 +43,24 @@ const ClientsPage = {
         <th>Client Name</th><th>Mobile</th><th>Plate</th><th>Vehicle</th><th>Plan</th><th>Start</th><th>Amount</th><th>Status</th><th>Actions</th>
       </tr></thead>
       <tbody>${rows.map(v => {
-        const rowClass = v.status === 'expired' ? 'row-expired' : '';
+        const noVehicle = !v.plate_number;
+        const rowClass  = v.status === 'expired' ? 'row-expired' : '';
+        if (noVehicle) {
+          // Client exists but has no vehicle yet
+          return `<tr class="${rowClass}" style="background:#fefce8">
+            <td><strong>${escHtml(v.full_name)}</strong></td>
+            <td>${escHtml(v.mobile || '—')}</td>
+            <td><span class="text-muted" style="font-style:italic">No vehicle</span></td>
+            <td>—</td><td>—</td><td>—</td><td>—</td>
+            <td><span class="badge badge-gray">No Vehicle</span></td>
+            <td class="actions">
+              <button class="btn btn-sm btn-outline btn-icon" onclick="ClientsPage.showClientDetail(${v.client_id})" title="View"><i class="fas fa-eye"></i></button>
+              <button class="btn btn-sm btn-outline btn-icon" onclick="ClientsPage.showEditClient(${v.client_id})" title="Edit Client"><i class="fas fa-edit"></i></button>
+              <button class="btn btn-sm btn-primary" onclick="ClientsPage.showAddVehicle(${v.client_id})" title="Add Vehicle" style="font-size:11px;padding:4px 8px"><i class="fas fa-plus"></i> Vehicle</button>
+              ${Auth.isAdmin() ? `<button class="btn btn-sm btn-outline btn-icon" onclick="ClientsPage.deleteClient(${v.client_id})" title="Delete Client"><i class="fas fa-trash"></i></button>` : ''}
+            </td>
+          </tr>`;
+        }
         return `<tr class="${rowClass}">
           <td><strong>${escHtml(v.full_name)}</strong></td>
           <td>${escHtml(v.mobile || '—')}</td>
@@ -55,8 +72,8 @@ const ClientsPage = {
           <td>${statusBadge(v.status)}</td>
           <td class="actions">
             <button class="btn btn-sm btn-outline btn-icon" onclick="ClientsPage.showClientDetail(${v.client_id})" title="View"><i class="fas fa-eye"></i></button>
-            <button class="btn btn-sm btn-outline btn-icon" onclick="ClientsPage.showEditVehicle(${v.id})" title="Edit Vehicle"><i class="fas fa-edit"></i></button>
-            ${Auth.isAdmin() ? `<button class="btn btn-sm btn-outline btn-icon" onclick="ClientsPage.deleteVehicle(${v.id})" title="Delete"><i class="fas fa-trash"></i></button>` : ''}
+            <button class="btn btn-sm btn-outline btn-icon" onclick="ClientsPage.showEditVehicle(${v.id})" title="Edit"><i class="fas fa-edit"></i></button>
+            ${Auth.isAdmin() ? `<button class="btn btn-sm btn-outline btn-icon" onclick="ClientsPage.deleteVehicle(${v.id})" title="Delete Vehicle"><i class="fas fa-trash"></i></button>` : ''}
           </td>
         </tr>`;
       }).join('')}</tbody>

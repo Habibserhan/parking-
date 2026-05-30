@@ -98,23 +98,50 @@ const InvoicesPage = {
   },
 
   _formHtml(inv = {}) {
-    const clientOpts = this.clients.map(c => `<option value="${c.id}" ${inv.client_id==c.id?'selected':''}>${escHtml(c.full_name)}</option>`).join('');
+    const clientOpts  = this.clients.map(c => `<option value="${c.id}" ${inv.client_id==c.id?'selected':''}>${escHtml(c.full_name)}</option>`).join('');
+    const isProrated  = !!inv.is_prorated;
+    const billingType = isProrated ? 'prorated' : 'full';
     return `<form id="modal-form"><div class="form-row cols-2">
       <div class="form-group"><label>Client *</label>
         <select name="client_id" required id="inv-client" onchange="InvoicesPage.loadClientVehicles()">${clientOpts ? `<option value="">Select client</option>${clientOpts}` : '<option>No clients</option>'}</select>
       </div>
       <div class="form-group"><label>Vehicle *</label>
         <select name="vehicle_id" required id="inv-vehicle" onchange="InvoicesPage.fillFromVehicle()"><option value="">Select vehicle</option></select>
+        <div id="inv-vehicle-hint" style="margin-top:4px;font-size:11px"></div>
       </div>
-      <div class="form-group"><label>Invoice Month *</label><input name="invoice_month" type="month" required value="${inv.invoice_month || currentMonth()}"></div>
-      <div class="form-group"><label>Amount *</label><input name="amount" type="text" inputmode="numeric" required value="${fmtAmountInput(inv.amount, inv.currency)}" id="inv-amount" oninput="InvoicesPage.calcFinal()"></div>
+      <div class="form-group"><label>Invoice Month *</label><input name="invoice_month" type="month" required value="${inv.invoice_month || currentMonth()}" oninput="InvoicesPage.calcFinal()"></div>
+      <div class="form-group"><label>Billing Type</label>
+        <select name="billing_type" id="inv-billing-type" onchange="InvoicesPage.onBillingTypeChange()">
+          <option value="full" ${!isProrated?'selected':''}>Full Month</option>
+          <option value="prorated" ${isProrated?'selected':''}>Prorated First Month</option>
+        </select>
+      </div>
+      <div id="inv-prorate-row" style="grid-column:1/-1;${isProrated?'':'display:none'}">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:14px;background:var(--bg);border-radius:8px;border:1.5px solid var(--primary);margin-bottom:4px">
+          <div class="form-group" style="margin:0">
+            <label style="color:var(--primary)"><i class="fas fa-calendar-day" style="margin-right:5px"></i>Client Start Date *</label>
+            <input name="prorated_start_date" id="inv-prorate-start" type="date" value="${inv.prorated_start_date || ''}" oninput="InvoicesPage.calcFinal()">
+          </div>
+          <div class="form-group" style="margin:0;display:flex;flex-direction:column;justify-content:flex-end">
+            <div id="inv-prorate-info" style="padding:10px 12px;background:#fff;border-radius:8px;border:1px solid var(--border);font-size:13px;color:var(--text-muted);min-height:40px;display:flex;align-items:center">
+              Enter start date to calculate
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="form-group"><label>Monthly Amount *</label><input name="amount" type="text" inputmode="numeric" required value="${fmtAmountInput(inv.amount, inv.currency)}" id="inv-amount" oninput="InvoicesPage.calcFinal()"></div>
       <div class="form-group"><label>Currency</label>${currencySelect('currency', inv.currency)}</div>
       <div class="form-group"><label>Discount</label><input name="discount" type="text" inputmode="numeric" value="${fmtAmountInput(inv.discount, inv.currency)}" oninput="InvoicesPage.calcFinal()"></div>
-      <div class="form-group"><label>Final Amount</label><input id="inv-final" type="text" value="${fmtAmountInput(inv.final_amount, inv.currency)}" readonly style="background:#f8fafc"></div>
+      <div class="form-group"><label>Invoice Amount <span style="color:var(--text-muted);font-size:11px">(auto)</span></label><input id="inv-final" type="text" value="${fmtAmountInput(inv.final_amount, inv.currency)}" readonly style="background:#f8fafc;font-weight:700"></div>
       <div class="form-group"><label>Due Date</label><input name="due_date" type="date" value="${inv.due_date || ''}"></div>
-      <div class="form-group"><label>Payment Status</label>
-        <select name="payment_status">
-          <option value="unpaid" ${inv.payment_status!=='paid'?'selected':''}>Unpaid</option>
+      <div class="form-group">
+        <label><i class="fas fa-coins" style="color:var(--warning);margin-right:5px"></i>Paid Amount</label>
+        <input name="paid_amount" type="text" inputmode="numeric" id="inv-paid-amount" value="${fmtAmountInput(inv.paid_amount, inv.currency)}" placeholder="0 if unpaid" oninput="InvoicesPage._updateStatusFromAmounts()">
+        <div id="inv-paid-hint" style="margin-top:4px;font-size:11px;color:var(--text-muted)"></div>
+      </div>
+      <div class="form-group"><label>Payment Status <span style="color:var(--text-muted);font-size:11px">(auto)</span></label>
+        <select name="payment_status" id="inv-ps-select">
+          <option value="unpaid" ${inv.payment_status!=='paid'&&inv.payment_status!=='partially_paid'?'selected':''}>Unpaid</option>
           <option value="paid" ${inv.payment_status==='paid'?'selected':''}>Paid</option>
           <option value="partially_paid" ${inv.payment_status==='partially_paid'?'selected':''}>Partially Paid</option>
         </select>
@@ -134,9 +161,21 @@ const InvoicesPage = {
   loadClientVehicles() {
     const clientId = document.getElementById('inv-client')?.value;
     const vehSel   = document.getElementById('inv-vehicle');
+    const vehHint  = document.getElementById('inv-vehicle-hint');
     if (!vehSel) return;
-    const veh = this.vehicles.filter(v => v.client_id == clientId);
-    vehSel.innerHTML = '<option value="">Select vehicle</option>' + veh.map(v => `<option value="${v.id}" data-amount="${v.amount}" data-plan="${v.subscription_plan_id}">${escHtml(v.plate_number)} (${escHtml(v.vehicle_type)})</option>`).join('');
+    const veh = this.vehicles.filter(v => String(v.client_id) === String(clientId));
+    if (!veh.length && clientId) {
+      vehSel.innerHTML = '<option value="">— No vehicles —</option>';
+      if (vehHint) { vehHint.textContent = 'This client has no subscription vehicles. Add a vehicle in the Clients page first.'; vehHint.style.color = 'var(--danger)'; }
+    } else {
+      vehSel.innerHTML = '<option value="">Select vehicle</option>' +
+        veh.map(v => {
+          const plan = this.plans.find(p => p.id == v.subscription_plan_id);
+          const label = `${escHtml(v.plate_number)} (${escHtml(v.vehicle_type)})${plan ? ' — ' + escHtml(plan.name) : ''}`;
+          return `<option value="${v.id}" data-amount="${v.amount}" data-plan="${v.subscription_plan_id}">${label}</option>`;
+        }).join('');
+      if (vehHint) vehHint.textContent = '';
+    }
   },
 
   fillFromVehicle() {
@@ -149,24 +188,94 @@ const InvoicesPage = {
   },
 
   calcFinal() {
-    const amount   = parseAmountInput(document.getElementById('inv-amount')?.value);
-    const discount = parseAmountInput(document.querySelector('#modal-form [name=discount]')?.value);
-    const cur      = document.querySelector('#modal-form [name=currency]')?.value || 'USD';
-    const el = document.getElementById('inv-final');
-    if (el) el.value = fmtAmountInput(Math.max(0, amount - discount), cur);
+    const amount      = parseAmountInput(document.getElementById('inv-amount')?.value);
+    const discount    = parseAmountInput(document.querySelector('#modal-form [name=discount]')?.value);
+    const cur         = document.querySelector('#modal-form [name=currency]')?.value || 'USD';
+    const billingType = document.getElementById('inv-billing-type')?.value;
+    const el          = document.getElementById('inv-final');
+
+    let base = amount;
+    if (billingType === 'prorated') {
+      const month     = document.querySelector('#modal-form [name=invoice_month]')?.value; // "YYYY-MM"
+      const startDate = document.getElementById('inv-prorate-start')?.value;               // "YYYY-MM-DD"
+      const infoEl    = document.getElementById('inv-prorate-info');
+      if (month && startDate) {
+        const [yr, mo] = month.split('-').map(Number);
+        const daysInMonth = new Date(yr, mo, 0).getDate();
+        const startDay    = parseInt(startDate.split('-')[2], 10);
+        if (startDay >= 1 && startDay <= daysInMonth) {
+          const daysUsed = daysInMonth - startDay + 1;
+          base = Math.round((amount * daysUsed) / daysInMonth);
+          if (infoEl) infoEl.innerHTML =
+            `<span style="color:var(--primary);font-weight:600">${daysUsed}</span> of ${daysInMonth} days = ` +
+            `<span style="color:var(--primary);font-weight:600">${Math.round(daysUsed / daysInMonth * 100)}%</span> &nbsp;→&nbsp; ` +
+            `<strong style="color:var(--primary)">${fmtRaw(base, cur)}</strong>`;
+        } else if (infoEl) infoEl.textContent = 'Invalid start date for selected month';
+      } else if (infoEl) infoEl.textContent = 'Enter start date to calculate';
+    }
+
+    if (el) el.value = fmtAmountInput(Math.max(0, base - discount), cur);
+    // Re-evaluate payment status now that the invoice total may have changed
+    this._updateStatusFromAmounts();
+  },
+
+  onBillingTypeChange() {
+    const bt  = document.getElementById('inv-billing-type')?.value;
+    const row = document.getElementById('inv-prorate-row');
+    if (row) row.style.display = bt === 'prorated' ? '' : 'none';
+    this.calcFinal();
+  },
+
+  _updateStatusFromAmounts() {
+    // Always read from #inv-final — it already holds the prorated amount when billing is prorated.
+    // Do NOT recompute from (amount - discount) here, that would ignore proration.
+    const invFinalEl = document.getElementById('inv-final');
+    const amount     = parseAmountInput(document.getElementById('inv-amount')?.value);
+    const discount   = parseAmountInput(document.querySelector('#modal-form [name=discount]')?.value);
+    const finalAmt   = invFinalEl?.value
+      ? parseAmountInput(invFinalEl.value)
+      : Math.max(0, amount - discount);
+    const paid   = parseAmountInput(document.getElementById('inv-paid-amount')?.value);
+    const psEl   = document.getElementById('inv-ps-select');
+    const hintEl = document.getElementById('inv-paid-hint');
+    const cur    = document.querySelector('#modal-form [name=currency]')?.value || 'USD';
+    if (!psEl) return;
+    if (finalAmt > 0 && paid >= finalAmt) {
+      psEl.value = 'paid';
+      if (hintEl) { hintEl.textContent = 'Fully paid'; hintEl.style.color = 'var(--success)'; }
+    } else if (paid > 0) {
+      psEl.value = 'partially_paid';
+      const rem = Math.max(0, finalAmt - paid);
+      if (hintEl) { hintEl.textContent = `Remaining: ${fmtRaw(rem, cur)}`; hintEl.style.color = 'var(--warning)'; }
+    } else {
+      psEl.value = 'unpaid';
+      if (hintEl) hintEl.textContent = '';
+    }
+    // Do NOT call calcFinal() here — it already calls us, so calling back would be circular.
+  },
+
+  _onPaymentStatusChange() {
+    const status = document.querySelector('#modal-form select[name="payment_status"]')?.value;
+    const group  = document.getElementById('inv-paid-amount-group');
+    if (group) group.style.display = status === 'partially_paid' ? '' : 'none';
   },
 
   showAdd() {
     Modal.show({ title: 'New Invoice', size: 'lg', body: this._formHtml(), onSave: async () => {
       if (!Modal.validate()) throw new Error('Please fill required fields');
       const data = Modal.getFormData();
-      const vehOpt = document.getElementById('inv-vehicle')?.options[document.getElementById('inv-vehicle').selectedIndex];
+      if (!data.vehicle_id) throw new Error('Please select a vehicle');
+      const vehOpt     = document.getElementById('inv-vehicle')?.options[document.getElementById('inv-vehicle').selectedIndex];
+      const finalAmount = parseAmountInput(document.getElementById('inv-final')?.value) ||
+                          (parseAmountInput(data.amount) - parseAmountInput(data.discount));
       await API.post('/invoices', {
         ...data,
+        is_prorated: data.billing_type === 'prorated',
         subscription_plan_id: vehOpt?.dataset.plan || null,
         amount: parseAmountInput(data.amount),
         discount: parseAmountInput(data.discount),
-        final_amount: parseAmountInput(data.amount) - parseAmountInput(data.discount)
+        paid_amount: parseAmountInput(data.paid_amount),
+        final_amount: finalAmount
       });
       Modal.close(); Toast.success('Invoice created'); Router.navigate('invoices');
     }});
@@ -175,11 +284,25 @@ const InvoicesPage = {
   showEdit(id) {
     const inv = this.data.find(x => x.id === id);
     Modal.show({ title: 'Edit Invoice', size: 'lg', body: this._formHtml(inv), onSave: async () => {
-      const data = Modal.getFormData();
-      await API.put(`/invoices/${id}`, { ...data, amount: parseAmountInput(data.amount), discount: parseAmountInput(data.discount), final_amount: parseAmountInput(data.amount) - parseAmountInput(data.discount) });
+      const data        = Modal.getFormData();
+      const finalAmount = parseAmountInput(document.getElementById('inv-final')?.value) ||
+                          (parseAmountInput(data.amount) - parseAmountInput(data.discount));
+      await API.put(`/invoices/${id}`, {
+        ...data,
+        is_prorated: data.billing_type === 'prorated',
+        amount: parseAmountInput(data.amount),
+        discount: parseAmountInput(data.discount),
+        paid_amount: parseAmountInput(data.paid_amount),
+        final_amount: finalAmount
+      });
       Modal.close(); Toast.success('Invoice updated'); Router.navigate('invoices');
     }});
-    setTimeout(() => { this.loadClientVehicles(); this.calcFinal(); }, 50);
+    setTimeout(() => {
+      this.loadClientVehicles();
+      const vehSel = document.getElementById('inv-vehicle');
+      if (vehSel && inv.vehicle_id) vehSel.value = inv.vehicle_id;
+      this.calcFinal();
+    }, 50);
   },
 
   async markPaid(id) {

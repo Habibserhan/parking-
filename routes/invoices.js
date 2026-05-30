@@ -3,6 +3,13 @@ const router = express.Router();
 const { sb } = require('../database/supabase');
 const { authenticate, adminOnly } = require('../middleware/auth');
 
+function isMissingColumnError(err) {
+  if (!err) return false;
+  return err.code === '42703' || err.code === 'PGRST204' ||
+    (err.message || '').includes('Could not find') ||
+    (err.message || '').includes('schema cache');
+}
+
 async function nextInvoiceNumber() {
   const { data: settings } = await sb.from('settings').select('invoice_prefix').eq('id', 1).maybeSingle();
   const prefix = settings?.invoice_prefix || 'INV';
@@ -177,25 +184,46 @@ router.get('/:id', authenticate, async (req, res) => {
 
 router.post('/', authenticate, async (req, res) => {
   try {
-    const { client_id, vehicle_id, subscription_plan_id, invoice_month, amount, discount, due_date, payment_status, payment_date, payment_method, notes, currency } = req.body;
+    const { client_id, vehicle_id, subscription_plan_id, invoice_month, amount, discount, due_date, payment_status, payment_date, payment_method, notes, currency, paid_amount } = req.body;
     if (!client_id || !vehicle_id || !invoice_month || amount == null) return res.status(400).json({ error: 'Required fields missing' });
 
     const { data: existing } = await sb.from('invoices').select('id').eq('vehicle_id', vehicle_id).eq('invoice_month', invoice_month).maybeSingle();
     if (existing) return res.status(400).json({ error: 'Invoice already exists for this vehicle and month' });
 
     const inv_num = await nextInvoiceNumber();
-    const final_amount = (Number(amount) || 0) - (Number(discount) || 0);
-    const { data, error } = await sb.from('invoices').insert({
+    const { is_prorated, prorated_start_date, final_amount: final_amount_body } = req.body;
+    // Allow caller to pass pre-calculated final_amount (e.g. prorated), else compute
+    const final_amount = (Number(final_amount_body) > 0) ? Number(final_amount_body) : (Number(amount) || 0) - (Number(discount) || 0);
+    const paidAmt = Number(paid_amount) || 0;
+    // Auto-determine payment status from amounts
+    let ps = final_amount > 0 && paidAmt >= final_amount ? 'paid'
+           : paidAmt > 0 ? 'partially_paid'
+           : (payment_status || 'unpaid');
+    const resolved_paid = ps === 'paid' ? final_amount : paidAmt;
+
+    const baseInsert = {
       invoice_number: inv_num, client_id, vehicle_id,
       subscription_plan_id: subscription_plan_id || null,
       invoice_month, amount, discount: discount || 0, final_amount,
       due_date: due_date || null,
-      payment_status: payment_status || 'unpaid',
+      payment_status: ps,
       payment_date: payment_date || null,
       payment_method: payment_method || 'cash',
       notes: notes || '',
-      currency: currency || 'USD'
-    }).select('id').single();
+      currency: currency || 'USD',
+      is_prorated: !!is_prorated,
+      prorated_start_date: prorated_start_date || null
+    };
+
+    // Try with all optional columns; strip any that don't exist in the DB yet
+    let { data, error } = await sb.from('invoices').insert({ ...baseInsert, paid_amount: resolved_paid }).select('id').single();
+    if (isMissingColumnError(error)) {
+      const fallback = { ...baseInsert, paid_amount: resolved_paid };
+      for (const col of ['paid_amount', 'is_prorated', 'prorated_start_date']) {
+        if ((error.message || '').includes(col)) delete fallback[col];
+      }
+      ({ data, error } = await sb.from('invoices').insert(fallback).select('id').single());
+    }
     if (error) return res.status(400).json({ error: error.message });
     res.status(201).json({ id: data.id, invoice_number: inv_num });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -203,17 +231,39 @@ router.post('/', authenticate, async (req, res) => {
 
 router.put('/:id', authenticate, async (req, res) => {
   try {
-    const { amount, discount, due_date, payment_status, payment_date, payment_method, notes, currency } = req.body;
-    const final_amount = (Number(amount) || 0) - (Number(discount) || 0);
-    await sb.from('invoices').update({
+    const { amount, discount, due_date, invoice_month, payment_status, payment_date, payment_method, notes, currency, paid_amount, is_prorated, prorated_start_date, final_amount: final_amount_body } = req.body;
+    // Use provided final_amount (e.g. prorated) or compute from amount - discount
+    const final_amount = (Number(final_amount_body) > 0) ? Number(final_amount_body) : (Number(amount) || 0) - (Number(discount) || 0);
+    const paidAmt = Number(paid_amount) || 0;
+    // Auto-determine payment status from amounts
+    let ps = final_amount > 0 && paidAmt >= final_amount ? 'paid'
+           : paidAmt > 0 ? 'partially_paid'
+           : (payment_status || 'unpaid');
+    const resolved_paid = ps === 'paid' ? final_amount : paidAmt;
+
+    const baseFields = {
       amount: amount || 0, discount: discount || 0, final_amount,
+      ...(invoice_month ? { invoice_month } : {}),
       due_date: due_date || null,
-      payment_status: payment_status || 'unpaid',
+      payment_status: ps,
       payment_date: payment_date || null,
       payment_method: payment_method || 'cash',
       notes: notes || '',
-      currency: currency || 'USD'
-    }).eq('id', req.params.id);
+      currency: currency || 'USD',
+      is_prorated: !!is_prorated,
+      prorated_start_date: prorated_start_date || null
+    };
+
+    // Try with all optional columns; strip any that don't exist in the DB yet
+    let result = await sb.from('invoices').update({ ...baseFields, paid_amount: resolved_paid }).eq('id', req.params.id);
+    if (isMissingColumnError(result.error)) {
+      const fallback = { ...baseFields, paid_amount: resolved_paid };
+      for (const col of ['paid_amount', 'is_prorated', 'prorated_start_date']) {
+        if ((result.error.message || '').includes(col)) delete fallback[col];
+      }
+      result = await sb.from('invoices').update(fallback).eq('id', req.params.id);
+    }
+    if (result.error) return res.status(400).json({ error: result.error.message });
     res.json({ message: 'Invoice updated' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

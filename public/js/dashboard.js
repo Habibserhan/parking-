@@ -8,6 +8,7 @@ const DashboardPage = {
   _activeType: null,
   _mode: 'date', // 'date' | 'all'
   _parkingDetailStatus: 'parked',
+  _parkingCompanyFilter: 'all', // 'all' | 'third_party' | 'free'
 
   async render() {
     return `
@@ -82,7 +83,7 @@ const DashboardPage = {
       const d = await API.get(query);
       this._stats = d.stats;
       document.getElementById('dash-content').innerHTML = `
-        <div class="stats-grid" id="stats-grid">${this._statCards(d.stats)}</div>
+        <div class="dash-sections" id="stats-grid">${this._statCards(d.stats)}</div>
         <div id="dash-detail-panel"></div>`;
     } catch (e) {
       document.getElementById('dash-content').innerHTML =
@@ -97,6 +98,8 @@ const DashboardPage = {
     if (btnUsd) { btnUsd.style.background = cur === 'USD' ? 'var(--primary)' : 'transparent'; btnUsd.style.color = cur === 'USD' ? '#fff' : 'var(--text-muted)'; }
     if (btnLbp) { btnLbp.style.background = cur === 'LBP' ? 'var(--primary)' : 'transparent'; btnLbp.style.color = cur === 'LBP' ? '#fff' : 'var(--text-muted)'; }
     if (this._stats) document.getElementById('stats-grid').innerHTML = this._statCards(this._stats);
+    // Re-apply active card highlight after redraw
+    if (this._activeType) document.getElementById('stats-grid')?.querySelectorAll('.dash-stat-active').forEach(el => el.classList.add('dash-stat-active'));
   },
 
   _fmtByCurrency(byCurrency) {
@@ -106,21 +109,53 @@ const DashboardPage = {
     return fmtRaw(convertAmount(usd, 'USD', cur) + convertAmount(lbp, 'LBP', cur), cur);
   },
 
+  _section(icon, title, cards) {
+    return `<div class="dash-section">
+      <div class="dash-section-title"><i class="fas ${icon}"></i>${title}</div>
+      <div class="stats-grid">${cards.join('')}</div>
+    </div>`;
+  },
+
   _statCards(s) {
     const from   = document.getElementById('dash-from')?.value || today();
     const to     = document.getElementById('dash-to')?.value   || today();
     const period = this._mode === 'all' ? 'All time' : (from === to ? from : `${from} → ${to}`);
-    return `
-      ${this._card('fa-dollar-sign',        'blue',   'Total Revenue',        this._fmtByCurrency(s.totalRevenueByCurrency),    period, 'total-revenue')}
-      ${this._card('fa-file-invoice',       'purple', 'Subscription Revenue', this._fmtByCurrency(s.subRevenueByCurrency),      period, 'sub-revenue')}
-      ${this._card('fa-car',                'cyan',   'Parking Revenue',      this._fmtByCurrency(s.parkingRevenueByCurrency),  period, 'parking-revenue')}
-      ${this._card('fa-shower',             'info',   'Services Revenue',     this._fmtByCurrency(s.servicesRevenueByCurrency), period, 'services-revenue')}
-      ${this._card('fa-receipt',            'amber',  'Total Expenses',       this._fmtByCurrency(s.expensesByCurrency),        period, 'expenses')}
-      ${this._card('fa-chart-line', (() => { const np=s.netProfitByCurrency||{},c=this._currency; return (convertAmount(np.USD||0,'USD',c)+convertAmount(np.LBP||0,'LBP',c))>=0; })() ? 'green' : 'red', 'Net Profit', this._fmtByCurrency(s.netProfitByCurrency), period, 'net-profit')}
-      ${this._card('fa-users',              'blue',   'Active Subscribers',   s.activeClients,    this._mode === 'all' ? 'All active clients'   : `Active on ${period}`,       'active-subscribers')}
-      ${this._card('fa-exclamation-circle', 'amber',  'Unpaid Subscribers',   s.unpaidClients,    this._mode === 'all' ? 'All unpaid invoices'  : `Unpaid — ${period.slice(0,7)}`, 'unpaid-subscribers')}
-      ${this._card('fa-parking',            'cyan',   this._mode === 'all' ? 'Currently Parked' : 'Vehicles Parked', s.currentlyParked, this._mode === 'all' ? 'Live — in lot now' : `Entered on ${period}`, 'currently-parked')}
-      ${this._card('fa-building',           'purple', this._mode === 'all' ? 'Third Party Parked' : 'Third Party — This Day', s.thirdPartyParked, this._mode === 'all' ? 'Company vehicles in lot' : `Company vehicles on ${period}`, 'third-party-parked')}`;
+    const sub    = period.slice(0, 7);
+    const all    = this._mode === 'all';
+    const np     = s.netProfitByCurrency || {};
+    const c      = this._currency;
+    const npPos  = (convertAmount(np.USD||0,'USD',c) + convertAmount(np.LBP||0,'LBP',c)) >= 0;
+
+    return [
+      this._section('fa-coins', 'Financial Overview', [
+        this._card('fa-dollar-sign',  'blue',              'Total Revenue',      this._fmtByCurrency(s.totalRevenueByCurrency),    period,                          'total-revenue'),
+        this._card('fa-chart-line',   npPos?'green':'red', 'Net Profit',         this._fmtByCurrency(s.netProfitByCurrency),       period,                          'net-profit'),
+        this._card('fa-receipt',      'amber',             'Total Expenses',     this._fmtByCurrency(s.expensesByCurrency),        period,                          'expenses'),
+        this._card('fa-clock',        'red',               'Outstanding Balance',this._fmtByCurrency(s.outstandingByCurrency),     all ? 'All unpaid & partial' : `Receivables — ${sub}`, 'outstanding-balance'),
+      ]),
+      this._section('fa-file-invoice', 'Subscription Overview', [
+        this._card('fa-file-invoice', 'purple', 'Subscription Revenue', this._fmtByCurrency(s.subRevenueByCurrency),  period,                              'sub-revenue'),
+        this._card('fa-users',        'blue',   'Active Subscribers',   s.activeClients, all ? 'All active clients'  : `Active on ${period}`,              'active-subscribers'),
+        this._card('fa-check-double', 'green',  'Paid Subscriptions',   s.paidClients,   all ? 'All paid invoices'   : `Paid — ${sub}`,                    'paid-subscriptions'),
+        this._card('fa-exclamation-circle','amber','Unpaid Subscribers', s.unpaidClients, all ? 'All unpaid invoices' : `Unpaid — ${sub}`,                  'unpaid-subscribers'),
+      ]),
+      this._section('fa-car', 'Parking Overview', (() => {
+        const tp = s.thirdPartyParked || 0;
+        const fp = (s.currentlyParked || 0) - tp;
+        const parkedVal = (s.currentlyParked || 0) > 0
+          ? `${s.currentlyParked}<br><span style="font-size:11px;font-weight:500;color:var(--text-muted)"><i class="fas fa-building" style="margin-right:3px;color:#8b5cf6"></i>${tp} &nbsp;·&nbsp; <i class="fas fa-car" style="margin-right:3px;color:#06b6d4"></i>${fp}</span>`
+          : '0';
+        return [
+          this._card('fa-car',      'cyan',   'Parking Revenue',                              this._fmtByCurrency(s.parkingRevenueByCurrency), period,                                                 'parking-revenue'),
+          this._card('fa-parking',  'cyan',   all ? 'Currently Parked' : 'Vehicles Parked',  parkedVal, all ? 'Live — in lot now' : `Entered on ${period}`,                                           'currently-parked'),
+          this._card('fa-building', 'purple', all ? 'Third Party Parked' : 'Third Party — This Day', s.thirdPartyParked, all ? 'Company vehicles in lot' : `Company vehicles on ${period}`,           'third-party-parked'),
+        ];
+      })()),
+      this._section('fa-shower', 'Services Overview', [
+        this._card('fa-shower',           'info',  'Services Revenue', this._fmtByCurrency(s.servicesRevenueByCurrency), period, 'services-revenue'),
+        this._card('fa-hand-holding-usd', 'green', 'Tips Revenue',     this._fmtByCurrency(s.tipsRevenueByCurrency),     period, 'tips-revenue'),
+      ]),
+    ].join('');
   },
 
   _card(icon, color, label, value, sub, type) {
@@ -159,9 +194,10 @@ const DashboardPage = {
     // Local breakdown types — no API needed
     if (type === 'total-revenue') {
       panel.innerHTML = this._panelWrap('Total Revenue Breakdown', this._summaryTable([
-        { icon: 'fa-file-invoice', color: 'purple', label: 'Subscription Revenue', value: this._fmtByCurrency(s.subRevenueByCurrency),      type: 'sub-revenue' },
-        { icon: 'fa-car',          color: 'cyan',   label: 'Parking Revenue',      value: this._fmtByCurrency(s.parkingRevenueByCurrency),  type: 'parking-revenue' },
-        { icon: 'fa-shower',       color: 'info',   label: 'Services Revenue',     value: this._fmtByCurrency(s.servicesRevenueByCurrency), type: 'services-revenue' },
+        { icon: 'fa-file-invoice',        color: 'purple', label: 'Subscription Revenue',       value: this._fmtByCurrency(s.subRevenueByCurrency),      type: 'sub-revenue' },
+        { icon: 'fa-car',                 color: 'cyan',   label: 'Parking Revenue',             value: this._fmtByCurrency(s.parkingRevenueByCurrency),  type: 'parking-revenue' },
+        { icon: 'fa-shower',              color: 'info',   label: 'Services Revenue (incl. tips)', value: this._fmtByCurrency(s.servicesRevenueByCurrency), type: 'services-revenue' },
+        { icon: 'fa-hand-holding-usd',    color: 'green',  label: 'of which: Tips',              value: this._fmtByCurrency(s.tipsRevenueByCurrency),     type: 'tips-revenue' },
       ], { icon: 'fa-dollar-sign', color: 'blue', label: 'Total Revenue', value: this._fmtByCurrency(s.totalRevenueByCurrency) }));
       return;
     }
@@ -174,11 +210,12 @@ const DashboardPage = {
       return;
     }
 
-    // Parking detail — custom panel with Parked / Completed toggle
+    // Parking detail — custom panel with Parked / Completed toggle + company filter
     if (type === 'currently-parked') {
-      this._parkingDetailStatus = 'parked';
+      this._parkingDetailStatus   = 'parked';
+      this._parkingCompanyFilter  = 'all';
       panel.innerHTML = this._parkingPanelHtml();
-      await this.loadParkingDetail('parked');
+      await this.loadParkingDetail('parked', 'all');
       return;
     }
 
@@ -187,30 +224,43 @@ const DashboardPage = {
       const dateFrom = document.getElementById('dash-from')?.value || today();
       const dateTo   = document.getElementById('dash-to')?.value   || today();
       const modeParam = this._mode === 'all' ? 'all' : 'date';
-      const data = await API.get(`/dashboard/details?type=${type}&date_from=${dateFrom}&date_to=${dateTo}&mode=${modeParam}`);
+      // tips-revenue reuses services-revenue data and filters client-side
+      const apiType = type === 'tips-revenue' ? 'services-revenue' : type;
+      const data = await API.get(`/dashboard/details?type=${apiType}&date_from=${dateFrom}&date_to=${dateTo}&mode=${modeParam}`);
       const html = this._buildTable(type, data);
-      panel.innerHTML = this._panelWrap(this._typeLabel(type), html, data.length);
+      const count = type === 'tips-revenue' ? data.filter(r => (Number(r.tip_amount) || 0) > 0).length : data.length;
+      panel.innerHTML = this._panelWrap(this._typeLabel(type), html, count);
     } catch (e) {
       panel.innerHTML = this._panelWrap(this._typeLabel(type), `<p class="text-muted text-center" style="padding:20px">${escHtml(e.message)}</p>`);
     }
   },
 
   _parkingPanelHtml() {
-    const s = this._parkingDetailStatus;
+    const s  = this._parkingDetailStatus;
+    const cf = this._parkingCompanyFilter;
+    const statusBtn = (id, val, label, icon) =>
+      `<button id="${id}" onclick="DashboardPage.loadParkingDetail('${val}', null)"
+        style="padding:0 14px;border:none;background:${s===val?'var(--primary)':'transparent'};color:${s===val?'#fff':'var(--text-muted)'};font-weight:600;cursor:pointer;font-size:12px;transition:.15s">
+        <i class="fas ${icon}" style="margin-right:4px"></i>${label}
+      </button>`;
+    const companyBtn = (id, val, label, icon, color) =>
+      `<button id="${id}" onclick="DashboardPage.loadParkingDetail(null, '${val}')"
+        style="padding:0 12px;border:none;background:${cf===val?color:'transparent'};color:${cf===val?'#fff':'var(--text-muted)'};font-weight:600;cursor:pointer;font-size:12px;transition:.15s">
+        ${icon ? `<i class="fas ${icon}" style="margin-right:3px"></i>` : ''}${label}
+      </button>`;
     return `<div class="card" style="margin-top:20px">
       <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-        <div style="display:flex;align-items:center;gap:10px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <span class="card-title">Vehicles Parked</span>
           <span id="pk-count" class="badge" style="background:var(--primary);color:#fff">…</span>
           <div style="display:flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;height:30px">
-            <button id="pk-btn-parked" onclick="DashboardPage.loadParkingDetail('parked')"
-              style="padding:0 14px;border:none;background:${s==='parked'?'var(--primary)':'transparent'};color:${s==='parked'?'#fff':'var(--text-muted)'};font-weight:600;cursor:pointer;font-size:12px;transition:.15s">
-              <i class="fas fa-parking" style="margin-right:4px"></i>Parked
-            </button>
-            <button id="pk-btn-completed" onclick="DashboardPage.loadParkingDetail('completed')"
-              style="padding:0 14px;border:none;background:${s==='completed'?'var(--primary)':'transparent'};color:${s==='completed'?'#fff':'var(--text-muted)'};font-weight:600;cursor:pointer;font-size:12px;transition:.15s">
-              <i class="fas fa-check-circle" style="margin-right:4px"></i>Completed
-            </button>
+            ${statusBtn('pk-btn-parked',    'parked',    'Parked',    'fa-parking')}
+            ${statusBtn('pk-btn-completed', 'completed', 'Completed', 'fa-check-circle')}
+          </div>
+          <div style="display:flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;height:30px">
+            ${companyBtn('pk-cf-all', 'all',         'All',        '',            'var(--primary)')}
+            ${companyBtn('pk-cf-tp',  'third_party', '3rd Party',  'fa-building', '#8b5cf6')}
+            ${companyBtn('pk-cf-fp',  'free',        'Free',       'fa-car',      '#06b6d4')}
           </div>
         </div>
         <button class="btn btn-sm btn-outline" onclick="DashboardPage.showDetails('currently-parked')"><i class="fas fa-times"></i> Close</button>
@@ -221,12 +271,26 @@ const DashboardPage = {
     </div>`;
   },
 
-  async loadParkingDetail(status) {
-    this._parkingDetailStatus = status;
+  async loadParkingDetail(status, companyFilter) {
+    // null means "keep current value"
+    if (status        !== null) this._parkingDetailStatus  = status;
+    if (companyFilter !== null) this._parkingCompanyFilter = companyFilter;
+    const s  = this._parkingDetailStatus;
+    const cf = this._parkingCompanyFilter;
+
+    // Update status button styles
     const pBtn = document.getElementById('pk-btn-parked');
     const cBtn = document.getElementById('pk-btn-completed');
-    if (pBtn) { pBtn.style.background = status === 'parked' ? 'var(--primary)' : 'transparent'; pBtn.style.color = status === 'parked' ? '#fff' : 'var(--text-muted)'; }
-    if (cBtn) { cBtn.style.background = status === 'completed' ? 'var(--primary)' : 'transparent'; cBtn.style.color = status === 'completed' ? '#fff' : 'var(--text-muted)'; }
+    if (pBtn) { pBtn.style.background = s === 'parked'    ? 'var(--primary)' : 'transparent'; pBtn.style.color = s === 'parked'    ? '#fff' : 'var(--text-muted)'; }
+    if (cBtn) { cBtn.style.background = s === 'completed' ? 'var(--primary)' : 'transparent'; cBtn.style.color = s === 'completed' ? '#fff' : 'var(--text-muted)'; }
+    // Update company filter button styles
+    const cfAll = document.getElementById('pk-cf-all');
+    const cfTp  = document.getElementById('pk-cf-tp');
+    const cfFp  = document.getElementById('pk-cf-fp');
+    if (cfAll) { cfAll.style.background = cf === 'all'         ? 'var(--primary)' : 'transparent'; cfAll.style.color = cf === 'all'         ? '#fff' : 'var(--text-muted)'; }
+    if (cfTp)  { cfTp.style.background  = cf === 'third_party' ? '#8b5cf6'        : 'transparent'; cfTp.style.color  = cf === 'third_party' ? '#fff' : 'var(--text-muted)'; }
+    if (cfFp)  { cfFp.style.background  = cf === 'free'        ? '#06b6d4'        : 'transparent'; cfFp.style.color  = cf === 'free'        ? '#fff' : 'var(--text-muted)'; }
+
     const tableWrap = document.getElementById('parking-detail-table');
     if (!tableWrap) return;
     tableWrap.innerHTML = '<div class="loading"><div class="spinner"></div> Loading…</div>';
@@ -234,7 +298,9 @@ const DashboardPage = {
       const dateFrom  = document.getElementById('dash-from')?.value || today();
       const dateTo    = document.getElementById('dash-to')?.value   || today();
       const modeParam = this._mode === 'all' ? 'all' : 'date';
-      const data = await API.get(`/dashboard/details?type=currently-parked&date_from=${dateFrom}&date_to=${dateTo}&mode=${modeParam}&parking_status=${status}`);
+      const params    = new URLSearchParams({ type: 'currently-parked', date_from: dateFrom, date_to: dateTo, mode: modeParam, parking_status: s });
+      if (cf !== 'all') params.set('company_type', cf);
+      const data = await API.get(`/dashboard/details?${params}`);
       const countEl = document.getElementById('pk-count');
       if (countEl) countEl.textContent = data.length;
       tableWrap.innerHTML = this._buildTable('currently-parked', data);
@@ -306,12 +372,29 @@ const DashboardPage = {
       </tr>`).join('')}</tbody></table>`;
 
     if (type === 'services-revenue') return `<table>
-      <thead><tr><th>Service</th><th>Client</th><th>Date</th><th>Amount</th></tr></thead>
-      <tbody>${data.map(r => `<tr>
+      <thead><tr><th>Service</th><th>Client</th><th>Date</th><th>Unit Price</th><th>Qty</th><th>Service Total</th><th>Tip</th></tr></thead>
+      <tbody>${data.map(r => {
+        const tip = Number(r.tip_amount) || 0;
+        return `<tr>
+          <td><strong>${escHtml(r.services?.name || '—')}</strong></td>
+          <td>${escHtml(r.clients?.full_name || '—')}</td>
+          <td>${fmtDate(r.service_date)}</td>
+          <td>${fmtRaw(r.price, r.currency)}</td>
+          <td class="text-muted">${r.quantity > 1 ? `<strong>${r.quantity}</strong>` : (r.quantity || 1)}</td>
+          <td class="fw-bold">${fmtRaw(r.final_amount, r.currency)}</td>
+          <td class="fw-bold" style="color:${tip > 0 ? 'var(--success)' : 'var(--text-muted)'}">${tip > 0 ? fmtRaw(tip, r.currency) : '—'}</td>
+        </tr>`;
+      }).join('')}</tbody></table>`;
+
+    if (type === 'tips-revenue') return `<table>
+      <thead><tr><th>Service</th><th>Client</th><th>Date</th><th>Service Total</th><th>Amount Received</th><th>Tip</th></tr></thead>
+      <tbody>${data.filter(r => (Number(r.tip_amount) || 0) > 0).map(r => `<tr>
         <td><strong>${escHtml(r.services?.name || '—')}</strong></td>
         <td>${escHtml(r.clients?.full_name || '—')}</td>
         <td>${fmtDate(r.service_date)}</td>
-        <td class="fw-bold">${fmtRaw(r.final_amount, r.currency)}</td>
+        <td>${fmtRaw(r.final_amount, r.currency)}</td>
+        <td>${fmtRaw(r.amount_received, r.currency)}</td>
+        <td class="fw-bold" style="color:var(--success)">${fmtRaw(r.tip_amount, r.currency)}</td>
       </tr>`).join('')}</tbody></table>`;
 
     if (type === 'expenses') return `<table>
@@ -369,6 +452,58 @@ const DashboardPage = {
         </tr>`;
       }).join('')}</tbody></table>`;
 
+    if (type === 'paid-subscriptions') return `<table>
+      <thead><tr><th>Client</th><th>Mobile</th><th>Plate</th><th>Plan</th><th>Month</th><th>Paid On</th><th>Amount</th></tr></thead>
+      <tbody>${data.map(r => `<tr>
+        <td><strong>${escHtml(r.clients?.full_name || '—')}</strong></td>
+        <td class="text-muted">${escHtml(r.clients?.mobile || '—')}</td>
+        <td>${escHtml(r.client_vehicles?.plate_number || '—')}</td>
+        <td>${escHtml(r.subscription_plans?.name || '—')}</td>
+        <td>${escHtml(r.invoice_month || '—')}</td>
+        <td class="text-muted">${fmtDate(r.payment_date)}</td>
+        <td class="fw-bold text-success">${fmtRaw(r.final_amount, r.currency)}</td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+
+    if (type === 'outstanding-balance') {
+      const totalInv  = data.reduce((s, r) => s + (r.invoice_total || 0), 0);
+      const totalPaid = data.reduce((s, r) => s + (r.paid_amount   || 0), 0);
+      const totalRem  = data.reduce((s, r) => s + (r.remaining     || 0), 0);
+      const cur = data[0]?.currency || 'USD';
+      const summary = `<div style="display:flex;gap:12px;flex-wrap:wrap;padding:16px 16px 0">
+        <div style="background:var(--bg);border-radius:8px;padding:12px 18px;flex:1;min-width:140px">
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">Total Invoiced</div>
+          <div style="font-size:18px;font-weight:700;margin-top:4px">${fmtRaw(totalInv, cur)}</div>
+        </div>
+        <div style="background:var(--bg);border-radius:8px;padding:12px 18px;flex:1;min-width:140px">
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">Total Paid</div>
+          <div style="font-size:18px;font-weight:700;color:var(--success);margin-top:4px">${fmtRaw(totalPaid, cur)}</div>
+        </div>
+        <div style="background:#fef2f2;border-radius:8px;padding:12px 18px;flex:1;min-width:140px;border:1px solid #fecaca">
+          <div style="font-size:11px;color:var(--danger);text-transform:uppercase;letter-spacing:.5px">Total Remaining</div>
+          <div style="font-size:18px;font-weight:700;color:var(--danger);margin-top:4px">${fmtRaw(totalRem, cur)}</div>
+        </div>
+      </div>`;
+      return summary + `<table style="margin-top:0">
+        <thead><tr><th>Client</th><th>Mobile</th><th>Plate</th><th>Invoice #</th><th>Month</th><th>Due Date</th><th>Invoice Total</th><th>Paid</th><th>Remaining</th><th>Status</th></tr></thead>
+        <tbody>${data.map(r => {
+          const overdue = r.due_date && r.due_date < today();
+          return `<tr>
+            <td><strong>${escHtml(r.full_name)}</strong></td>
+            <td class="text-muted">${escHtml(r.mobile || '—')}</td>
+            <td>${escHtml(r.plate_number)}</td>
+            <td><span class="badge badge-gray">${escHtml(r.invoice_number || '—')}</span></td>
+            <td class="text-muted">${escHtml(r.invoice_month || '—')}</td>
+            <td class="${overdue ? 'text-danger' : ''}">${fmtDate(r.due_date)}</td>
+            <td>${fmtRaw(r.invoice_total, r.currency)}</td>
+            <td class="text-success">${r.paid_amount > 0 ? fmtRaw(r.paid_amount, r.currency) : '<span class="text-muted">—</span>'}</td>
+            <td class="fw-bold text-danger">${fmtRaw(r.remaining, r.currency)}</td>
+            <td>${statusBadge(r.payment_status)}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>`;
+    }
+
     if (type === 'third-party-parked') return `<table>
       <thead><tr><th>Plate</th><th>Type</th><th>Company</th><th>Entry Time</th><th>Exit Time</th><th>Duration</th><th>Status</th><th>Notes</th></tr></thead>
       <tbody>${data.map(r => {
@@ -395,7 +530,10 @@ const DashboardPage = {
       'parking-revenue': 'Parking Revenue', 'services-revenue': 'Services Revenue',
       'expenses': 'Expenses', 'net-profit': 'Net Profit',
       'active-subscribers': 'Active Subscribers', 'unpaid-subscribers': 'Unpaid Subscribers',
-      'currently-parked': 'Vehicles Parked', 'third-party-parked': 'Third Party Vehicles'
+      'currently-parked': 'Vehicles Parked', 'third-party-parked': 'Third Party Vehicles',
+      'outstanding-balance':  'Outstanding Client Balances',
+      'paid-subscriptions':   'Paid Subscriptions',
+      'tips-revenue':         'Tips Revenue'
     };
     return map[type] || type;
   }

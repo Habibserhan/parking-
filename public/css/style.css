@@ -429,11 +429,19 @@ body {
 .card-body { padding: 20px; }
 
 /* ======== STAT CARDS ======== */
+.dash-sections { display: flex; flex-direction: column; gap: 28px; }
+.dash-section { background: var(--bg); border-radius: 12px; padding: 20px; border: 1px solid var(--border); }
+.dash-section-title {
+  font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--text-muted); margin-bottom: 14px; display: flex; align-items: center; gap: 7px;
+  padding-bottom: 10px; border-bottom: 1px solid var(--border);
+}
+.dash-section-title i { font-size: 13px; opacity: .8; }
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 16px;
-  margin-bottom: 24px;
+  margin-bottom: 0;
 }
 .stat-card {
   background: #fff;
@@ -765,6 +773,7 @@ tbody td.actions { white-space: nowrap; }
   .sidebar { transform: translateX(-100%); }
   .sidebar.open { transform: translateX(0); }
   .main-content { margin-left: 0; }
+  .dash-section { padding: 14px; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
   .charts-grid { grid-template-columns: 1fr; }
   .form-row.cols-2, .form-row.cols-3 { grid-template-columns: 1fr; }

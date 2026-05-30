@@ -5,13 +5,16 @@ const { authenticate } = require('../middleware/auth');
 
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { search, parking_status, date_from, date_to, is_third_party } = req.query;
+    const { search, parking_status, date_from, date_to, is_third_party, vehicle_type } = req.query;
     let query = sb.from('daily_parking').select('*').order('entry_time', { ascending: false });
     if (search)                      query = query.ilike('plate_number', `%${search}%`);
     if (parking_status)              query = query.eq('parking_status', parking_status);
     if (date_from)                   query = query.gte('entry_time', `${date_from}T00:00:00`);
     if (date_to)                     query = query.lte('entry_time', `${date_to}T23:59:59`);
     if (is_third_party === 'true')   query = query.eq('is_third_party', true);
+    // bulk_total rows only returned when explicitly requested; always hidden from normal lists/search
+    if (vehicle_type === 'bulk_total') query = query.eq('vehicle_type', 'bulk_total');
+    else                               query = query.neq('vehicle_type', 'bulk_total');
     const { data } = await query;
     res.json(data || []);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -19,10 +22,25 @@ router.get('/', authenticate, async (req, res) => {
 
 router.post('/', authenticate, async (req, res) => {
   try {
-    const { plate_number, vehicle_type, entry_time, notes, third_party_company, card_number } = req.body;
+    const { plate_number, vehicle_type, entry_time, notes, third_party_company, card_number,
+            parking_status, payment_status, amount, currency, exit_time, duration_minutes } = req.body;
     if (!plate_number || !vehicle_type) return res.status(400).json({ error: 'Plate number and vehicle type required' });
     const { data, error } = await sb.from('daily_parking')
-      .insert({ plate_number: plate_number.toUpperCase(), vehicle_type, entry_time: entry_time || new Date().toISOString(), notes: notes || '', is_third_party: !!third_party_company, third_party_company: third_party_company || null, card_number: card_number || null })
+      .insert({
+        plate_number:     plate_number.toUpperCase(),
+        vehicle_type,
+        entry_time:       entry_time      || new Date().toISOString(),
+        exit_time:        exit_time       || null,
+        duration_minutes: duration_minutes != null ? Number(duration_minutes) : 0,
+        amount:           amount          != null ? Number(amount) : 0,
+        currency:         currency        || 'USD',
+        parking_status:   parking_status  || 'parked',
+        payment_status:   payment_status  || 'unpaid',
+        notes:            notes           || '',
+        is_third_party:   !!third_party_company,
+        third_party_company: third_party_company || null,
+        card_number:      card_number     || null
+      })
       .select('id').single();
     if (error) return res.status(400).json({ error: error.message });
     res.status(201).json({ id: data.id, message: 'Vehicle checked in' });
@@ -31,7 +49,7 @@ router.post('/', authenticate, async (req, res) => {
 
 router.post('/:id/checkout', authenticate, async (req, res) => {
   try {
-    const { amount, payment_status, currency, card_number, exit_time: reqExitTime } = req.body;
+    const { amount, payment_status, currency, card_number, exit_time: reqExitTime, notes } = req.body;
     const { data: entry } = await sb.from('daily_parking').select('*').eq('id', req.params.id).maybeSingle();
     if (!entry) return res.status(404).json({ error: 'Record not found' });
     if (entry.parking_status === 'completed') return res.status(400).json({ error: 'Already checked out' });
@@ -45,7 +63,8 @@ router.post('/:id/checkout', authenticate, async (req, res) => {
       payment_status: payment_status || 'paid',
       parking_status: 'completed',
       currency: currency || 'USD',
-      ...(card_number != null ? { card_number } : {})
+      ...(card_number != null ? { card_number } : {}),
+      ...(notes != null ? { notes } : {})
     }).eq('id', req.params.id);
     res.json({ message: 'Checked out', duration_minutes });
   } catch (e) { res.status(500).json({ error: e.message }); }

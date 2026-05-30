@@ -30,21 +30,66 @@ function flattenVehicle(v) {
 router.get('/all/vehicles', authenticate, async (req, res) => {
   try {
     const { search, status } = req.query;
-    let query = sb.from('client_vehicles')
-      .select('*, clients(full_name, mobile), subscription_plans(name, duration)');
-    if (status) query = query.eq('status', status);
-    const { data } = await query;
 
-    let result = (data || []).map(flattenVehicle);
+    // Fetch all clients (LEFT JOIN — we want clients even with no vehicles)
+    const { data: clients } = await sb.from('clients')
+      .select('id, full_name, mobile, notes')
+      .order('full_name');
+
+    // Fetch all vehicles
+    let vehQuery = sb.from('client_vehicles')
+      .select('*, subscription_plans(name, duration)');
+    if (status) vehQuery = vehQuery.eq('status', status);
+    const { data: vehicles } = await vehQuery;
+
+    // Group vehicles by client_id
+    const vehicleMap = {};
+    (vehicles || []).forEach(v => {
+      (vehicleMap[v.client_id] = vehicleMap[v.client_id] || []).push(v);
+    });
+
+    // Build rows: one per vehicle, or one placeholder row per client with no vehicles
+    const rows = [];
+    (clients || []).forEach(client => {
+      const cvs = vehicleMap[client.id] || [];
+      if (!cvs.length) {
+        // Client with no vehicles — placeholder row
+        rows.push({
+          id:           null,
+          client_id:    client.id,
+          full_name:    client.full_name,
+          mobile:       client.mobile || '',
+          plate_number: null,
+          vehicle_type: null,
+          plan_name:    null,
+          status:       'no_vehicle',
+          amount:       null,
+          currency:     'USD',
+          start_date:   null
+        });
+      } else {
+        cvs.forEach(v => rows.push({
+          ...v,
+          full_name:  client.full_name,
+          mobile:     client.mobile || '',
+          plan_name:  v.subscription_plans?.name     || null,
+          duration:   v.subscription_plans?.duration || null,
+          subscription_plans: undefined
+        }));
+      }
+    });
+
+    // Apply search (name, mobile, plate)
+    let result = rows;
     if (search) {
       const s = search.toLowerCase();
-      result = result.filter(v =>
-        (v.full_name     || '').toLowerCase().includes(s) ||
-        (v.mobile        || '').toLowerCase().includes(s) ||
-        (v.plate_number  || '').toLowerCase().includes(s)
+      result = rows.filter(v =>
+        (v.full_name    || '').toLowerCase().includes(s) ||
+        (v.mobile       || '').toLowerCase().includes(s) ||
+        (v.plate_number || '').toLowerCase().includes(s)
       );
     }
-    result.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
+
     res.json(result);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

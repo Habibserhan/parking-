@@ -5,13 +5,25 @@ const ServicesPage = {
   title: 'Services',
   adminOnly: false,
   data: [],
+  _txData: [],
+  _currency: 'USD',
 
   async render() {
-    this.data = await API.get('/services');
+    [this.data, this._txData] = await Promise.all([
+      API.get('/services'),
+      API.get('/transactions?payment_status=paid')
+    ]);
     return `
       <div class="page-header">
         <div class="page-title"><h2>Services</h2><p>Manage available wash and cleaning services</p></div>
-        <div class="page-actions">
+        <div class="page-actions" style="gap:8px">
+          <div style="display:flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;height:38px">
+            <button id="svc-btn-usd" onclick="ServicesPage.setCurrency('USD')"
+              style="padding:0 14px;border:none;background:${this._currency==='USD'?'var(--primary)':'transparent'};color:${this._currency==='USD'?'#fff':'var(--text-muted)'};font-weight:700;cursor:pointer;font-size:13px;transition:.15s">$ USD</button>
+            <button id="svc-btn-lbp" onclick="ServicesPage.setCurrency('LBP')"
+              style="padding:0 14px;border:none;background:${this._currency==='LBP'?'var(--primary)':'transparent'};color:${this._currency==='LBP'?'#fff':'var(--text-muted)'};font-weight:700;cursor:pointer;font-size:13px;transition:.15s">LL LBP</button>
+          </div>
+          <span id="svc-total-badge" class="badge badge-success" style="font-size:14px;padding:8px 14px">${this._fmtTotal()}</span>
           ${Auth.isAdmin() ? '<button class="btn btn-primary" onclick="ServicesPage.showAdd()"><i class="fas fa-plus"></i> Add Service</button>' : ''}
         </div>
       </div>
@@ -31,6 +43,20 @@ const ServicesPage = {
   init() {
     document.getElementById('svc-search').addEventListener('input', () => this.filter());
     document.getElementById('svc-active').addEventListener('change', () => this.filter());
+  },
+
+  _fmtTotal() {
+    return fmtRaw(sumConverted(this._txData, this._currency, 'final_amount'), this._currency);
+  },
+
+  setCurrency(cur) {
+    this._currency = cur;
+    const uBtn = document.getElementById('svc-btn-usd');
+    const lBtn = document.getElementById('svc-btn-lbp');
+    if (uBtn) { uBtn.style.background = cur === 'USD' ? 'var(--primary)' : 'transparent'; uBtn.style.color = cur === 'USD' ? '#fff' : 'var(--text-muted)'; }
+    if (lBtn) { lBtn.style.background = cur === 'LBP' ? 'var(--primary)' : 'transparent'; lBtn.style.color = cur === 'LBP' ? '#fff' : 'var(--text-muted)'; }
+    const badge = document.getElementById('svc-total-badge');
+    if (badge) badge.textContent = this._fmtTotal();
   },
 
   renderTable(rows) {
