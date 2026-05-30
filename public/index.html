@@ -133,51 +133,81 @@
     </div>
 
     <nav class="sidebar-nav">
-      <div class="nav-section">Main</div>
+
+      <!-- ── MAIN ── -->
+      <div class="nav-section">📊 Main</div>
       <div class="nav-item active" data-page="dashboard">
         <i class="fas fa-tachometer-alt"></i> Dashboard
       </div>
 
-      <div class="nav-section">Parking</div>
-      <div class="nav-item" data-page="clients">
-        <i class="fas fa-users"></i> Clients
+      <!-- ── PARKING MANAGEMENT ── -->
+      <div class="nav-section-header" onclick="toggleNavSection('parking')">
+        <span>🚗 Parking Management</span>
+        <i class="fas fa-chevron-down nav-chevron" id="chev-parking"></i>
       </div>
-      <div class="nav-item" data-page="plans">
-        <i class="fas fa-tags"></i> Subscription Plans
-      </div>
-      <div class="nav-item" data-page="daily-parking">
-        <i class="fas fa-car"></i> Daily Parking
-      </div>
-      <div class="nav-item" data-page="third-party">
-        <i class="fas fa-building"></i> Third Party
-      </div>
-
-      <div class="nav-section">Services</div>
-      <div class="nav-item" data-page="services">
-        <i class="fas fa-shower"></i> Services
-      </div>
-      <div class="nav-item" data-page="transactions">
-        <i class="fas fa-soap"></i> Daily Services
+      <div class="nav-section-items" id="section-parking">
+        <div class="nav-item" data-page="clients">
+          <i class="fas fa-users"></i> Clients
+        </div>
+        <div class="nav-item" data-page="plans">
+          <i class="fas fa-tags"></i> Subscription Plans
+        </div>
+        <div class="nav-item" data-page="daily-parking">
+          <i class="fas fa-car"></i> Daily Parking
+        </div>
+        <div class="nav-item" data-page="third-party">
+          <i class="fas fa-building"></i> Third Party
+        </div>
       </div>
 
-      <div class="nav-section">Finance</div>
-      <div class="nav-item" data-page="expenses" data-admin>
-        <i class="fas fa-receipt"></i> Expenses
+      <!-- ── SERVICES MANAGEMENT ── -->
+      <div class="nav-section-header" onclick="toggleNavSection('services')">
+        <span>🛠 Services Management</span>
+        <i class="fas fa-chevron-down nav-chevron" id="chev-services"></i>
       </div>
-      <div class="nav-item" data-page="employees" data-admin>
-        <i class="fas fa-user-tie"></i> Employee Salaries
-      </div>
-      <div class="nav-item" data-page="invoices">
-        <i class="fas fa-file-invoice-dollar"></i> Invoices
-      </div>
-      <div class="nav-item" data-page="unpaid">
-        <i class="fas fa-exclamation-circle"></i> Unpaid Subscriptions
+      <div class="nav-section-items" id="section-services">
+        <div class="nav-item" data-page="services">
+          <i class="fas fa-shower"></i> Services
+        </div>
+        <div class="nav-item" data-page="transactions">
+          <i class="fas fa-soap"></i> Daily Services
+        </div>
       </div>
 
-      <div class="nav-section">Admin</div>
-      <div class="nav-item" data-page="users" data-admin>
-        <i class="fas fa-user-cog"></i> Users & Settings
+      <!-- ── FINANCIAL MANAGEMENT ── -->
+      <div class="nav-section-header" onclick="toggleNavSection('financial')">
+        <span>💰 Financial Management</span>
+        <i class="fas fa-chevron-down nav-chevron" id="chev-financial"></i>
       </div>
+      <div class="nav-section-items" id="section-financial">
+        <div class="nav-item" data-page="invoices">
+          <i class="fas fa-file-invoice-dollar"></i> Invoices
+        </div>
+        <div class="nav-item" data-page="unpaid">
+          <i class="fas fa-exclamation-circle"></i> Unpaid Subscriptions
+        </div>
+        <div class="nav-item" data-page="expenses" data-admin>
+          <i class="fas fa-receipt"></i> Expenses
+        </div>
+        <div class="nav-item" data-page="employees" data-admin>
+          <i class="fas fa-user-tie"></i> Employee Salaries
+        </div>
+        <div class="nav-item" data-page="reports">
+          <i class="fas fa-chart-bar"></i> Reports
+        </div>
+      </div>
+
+      <!-- ── ADMINISTRATION ── -->
+      <div class="nav-section-header" onclick="toggleNavSection('admin')">
+        <span>⚙ Administration</span>
+        <i class="fas fa-chevron-down nav-chevron" id="chev-admin"></i>
+      </div>
+      <div class="nav-section-items" id="section-admin">
+        <div class="nav-item" data-page="users" data-admin>
+          <i class="fas fa-user-cog"></i> Users & Settings
+        </div>
+      </div>
+
     </nav>
 
     <div class="sidebar-footer">
@@ -235,6 +265,47 @@
 <script>
   // Show today's date in topbar
   document.getElementById('topbar-date').textContent = new Date().toLocaleDateString('en-US', { weekday:'short', year:'numeric', month:'short', day:'numeric' });
+
+  // ── Collapsible sidebar sections ──────────────────────────
+  const NAV_SECTIONS = ['parking', 'services', 'financial', 'admin'];
+
+  function toggleNavSection(key) {
+    const section = document.getElementById('section-' + key);
+    const chevron = document.getElementById('chev-' + key);
+    if (!section) return;
+    const isCollapsed = section.classList.contains('collapsed');
+    section.classList.toggle('collapsed', !isCollapsed);
+    chevron?.classList.toggle('collapsed', !isCollapsed);
+    localStorage.setItem('nav-' + key, isCollapsed ? 'open' : 'collapsed');
+  }
+
+  // Restore saved states on load
+  NAV_SECTIONS.forEach(key => {
+    if (localStorage.getItem('nav-' + key) === 'collapsed') {
+      document.getElementById('section-' + key)?.classList.add('collapsed');
+      document.getElementById('chev-' + key)?.classList.add('collapsed');
+    }
+  });
+
+  // Auto-expand the section that contains the active page
+  function expandActiveSection() {
+    NAV_SECTIONS.forEach(key => {
+      const section = document.getElementById('section-' + key);
+      if (!section) return;
+      if (section.querySelector('.nav-item.active')) {
+        section.classList.remove('collapsed');
+        document.getElementById('chev-' + key)?.classList.remove('collapsed');
+        localStorage.setItem('nav-' + key, 'open');
+      }
+    });
+  }
+  // Run after Router sets the active item (on load + on every nav click)
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(expandActiveSection, 200);
+    document.querySelectorAll('.nav-item[data-page]').forEach(el => {
+      el.addEventListener('click', () => setTimeout(expandActiveSection, 50));
+    });
+  });
 </script>
 
 </body>

@@ -338,12 +338,51 @@ body {
 .sidebar-nav { padding: 12px 0; flex: 1; }
 
 .nav-section {
-  padding: 8px 16px 4px;
+  padding: 14px 16px 4px;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: .08em;
+  letter-spacing: .1em;
   color: rgba(255,255,255,.35);
+}
+
+/* Collapsible section header */
+.nav-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: rgba(255,255,255,.35);
+  cursor: pointer;
+  user-select: none;
+  margin-top: 6px;
+  transition: color .15s;
+}
+.nav-section-header:hover { color: rgba(255,255,255,.6); }
+.nav-section-header:hover .nav-chevron { color: rgba(255,255,255,.6); }
+
+.nav-chevron {
+  font-size: 9px;
+  color: rgba(255,255,255,.25);
+  transition: transform .2s ease, color .15s;
+  flex-shrink: 0;
+}
+.nav-chevron.collapsed { transform: rotate(-90deg); }
+
+/* Collapsible items wrapper */
+.nav-section-items {
+  overflow: hidden;
+  transition: max-height .25s ease, opacity .2s ease;
+  max-height: 600px;
+  opacity: 1;
+}
+.nav-section-items.collapsed {
+  max-height: 0;
+  opacity: 0;
 }
 
 .nav-item {
