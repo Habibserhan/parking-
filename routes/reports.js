@@ -15,18 +15,55 @@ router.get('/revenue', authenticate, async (req, res) => {
     const from = req.query.date_from || monthStartStr();
     const to   = req.query.date_to   || todayStr();
 
-    const { data: invData }  = await sb.from('invoices').select('final_amount').eq('payment_status', 'paid').gte('invoice_month', from.slice(0,7)).lte('invoice_month', to.slice(0,7));
-    const { data: parkData } = await sb.from('daily_parking').select('amount').eq('payment_status', 'paid').gte('entry_time', `${from}T00:00:00`).lte('entry_time', `${to}T23:59:59`);
-    const { data: svcData }  = await sb.from('service_transactions').select('final_amount, tip_amount').eq('payment_status', 'paid').gte('service_date', from).lte('service_date', to);
-    const { data: expData }  = await sb.from('expenses').select('amount').gte('expense_date', from).lte('expense_date', to);
+    const [{ data: invData }, { data: parkData }, { data: svcData }, { data: expData }, settingsResult] = await Promise.all([
+      sb.from('invoices').select('final_amount, currency').eq('payment_status', 'paid').gte('invoice_month', from.slice(0,7)).lte('invoice_month', to.slice(0,7)),
+      sb.from('daily_parking').select('amount, currency').eq('payment_status', 'paid').gte('entry_time', `${from}T00:00:00`).lte('entry_time', `${to}T23:59:59`),
+      sb.from('service_transactions').select('final_amount, tip_amount, currency').eq('payment_status', 'paid').gte('service_date', from).lte('service_date', to),
+      sb.from('expenses').select('amount, currency').gte('expense_date', from).lte('expense_date', to),
+      sb.from('settings').select('custom_rates').eq('id', 1).maybeSingle()
+    ]);
 
-    const sub  = sum(invData  || [], 'final_amount');
-    const park = sum(parkData || [], 'amount');
-    const svcBase = sum(svcData || [], 'final_amount');
-    const tips    = sum(svcData || [], 'tip_amount');
-    const svc     = svcBase + tips;
-    const exp  = sum(expData  || [], 'amount');
-    res.json({ subscriptions: sub, parking: park, services: svc, tips, total: sub + park + svc, expenses: exp, profit: sub + park + svc - exp });
+    // Currency multipliers (parking amounts are stored ÷ multiplier)
+    let multipliers = { LBP: 1000 };
+    try {
+      const cr = JSON.parse(settingsResult.data?.custom_rates || '{}');
+      Object.entries(cr).forEach(([k, v]) => {
+        if (!k.startsWith('__') && typeof v === 'object' && v?.multiplier) multipliers[k] = v.multiplier;
+      });
+    } catch {}
+
+    const byCur = (arr, key) => arr.reduce((acc, r) => {
+      const cur = r.currency || 'USD';
+      acc[cur] = (acc[cur] || 0) + (Number(r[key]) || 0);
+      return acc;
+    }, {});
+
+    // Normalize parking (stored as base units)
+    const normalizedParking = (parkData || []).map(r => ({
+      currency: r.currency,
+      amount: (Number(r.amount) || 0) * (multipliers[r.currency || 'USD'] || 1)
+    }));
+
+    const svcWithTips = (svcData || []).map(r => ({
+      currency: r.currency,
+      revenue: (Number(r.final_amount) || 0) + (Number(r.tip_amount) || 0),
+      tip:      Number(r.tip_amount) || 0
+    }));
+
+    const subByCur  = byCur(invData         || [], 'final_amount');
+    const parkByCur = byCur(normalizedParking,     'amount');
+    const svcByCur  = byCur(svcWithTips,           'revenue');
+    const tipsByCur = byCur(svcWithTips,           'tip');
+    const expByCur  = byCur(expData          || [], 'amount');
+
+    const allCurs = new Set([...Object.keys(subByCur), ...Object.keys(parkByCur), ...Object.keys(svcByCur), ...Object.keys(expByCur)]);
+    const totalByCur = {}, profitByCur = {};
+    for (const cur of allCurs) {
+      totalByCur[cur]  = (subByCur[cur] || 0) + (parkByCur[cur] || 0) + (svcByCur[cur] || 0);
+      profitByCur[cur] = totalByCur[cur] - (expByCur[cur] || 0);
+    }
+
+    res.json({ subscriptions: subByCur, parking: parkByCur, services: svcByCur, tips: tipsByCur, total: totalByCur, expenses: expByCur, profit: profitByCur });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
