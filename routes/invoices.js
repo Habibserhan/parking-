@@ -90,7 +90,10 @@ router.get('/unpaid/subscriptions', authenticate, async (req, res) => {
 
 router.post('/generate-monthly', authenticate, adminOnly, async (req, res) => {
   try {
-    const today = new Date().toISOString().slice(0, 7); // fallback: current YYYY-MM
+    const now = new Date();
+    const today = now.toISOString().slice(0, 7); // current YYYY-MM
+    const nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const nextMonth = nextMonthDate.toISOString().slice(0, 7); // next YYYY-MM
 
     const { data: vehicles } = await sb.from('client_vehicles')
       .select('id, client_id, subscription_plan_id, amount, start_date, subscription_plans(price)')
@@ -121,8 +124,8 @@ router.post('/generate-monthly', authenticate, adminOnly, async (req, res) => {
 
     for (const v of vehicles) {
       const invoice_month = v.start_date ? v.start_date.slice(0, 7) : today;
-      // Only generate if vehicle's start_date is in the current month and year
-      if (invoice_month !== today) { skipped++; continue; }
+      // Only generate if vehicle's start_date is in the current or next month
+      if (invoice_month !== today && invoice_month !== nextMonth) { skipped++; continue; }
       if (existingSet.has(`${v.id}:${invoice_month}`)) { skipped++; continue; }
       maxNum++;
       const inv_num = `${prefix}-${String(maxNum).padStart(5, '0')}`;
