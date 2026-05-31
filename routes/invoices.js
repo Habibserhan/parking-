@@ -98,8 +98,7 @@ router.post('/generate-monthly', authenticate, adminOnly, async (req, res) => {
 
     const { data: vehicles } = await sb.from('client_vehicles')
       .select('id, client_id, subscription_plan_id, amount, start_date, subscription_plans(price)')
-      .eq('status', 'active')
-      .not('subscription_plan_id', 'is', null);
+      .eq('status', 'active');
 
     if (!vehicles || !vehicles.length) return res.json({ generated: 0, skipped: 0 });
 
