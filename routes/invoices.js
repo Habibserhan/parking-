@@ -61,7 +61,8 @@ router.get('/unpaid/subscriptions', authenticate, async (req, res) => {
     const invoiceMap = {};
     (invoices || []).forEach(i => { invoiceMap[`${i.vehicle_id}:${i.invoice_month}`] = i; });
 
-    const currentMonth = new Date().toISOString().slice(0, 7);
+    const nowB = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Beirut' }));
+    const currentMonth = `${nowB.getFullYear()}-${String(nowB.getMonth() + 1).padStart(2, '0')}`;
     const rows = vehicles
       .map(v => {
         const vehicleMonth = v.start_date ? v.start_date.slice(0, 7) : currentMonth;
@@ -91,10 +92,8 @@ router.get('/unpaid/subscriptions', authenticate, async (req, res) => {
 
 router.post('/generate-monthly', authenticate, adminOnly, async (req, res) => {
   try {
-    const now = new Date();
-    const today = now.toISOString().slice(0, 7); // current YYYY-MM
-    const nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    const nextMonth = nextMonthDate.toISOString().slice(0, 7); // next YYYY-MM
+    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Beirut' }));
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
     const { data: vehicles } = await sb.from('client_vehicles')
       .select('id, client_id, subscription_plan_id, amount, start_date, subscription_plans(price)')
