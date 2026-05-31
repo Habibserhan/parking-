@@ -132,6 +132,60 @@ const Modal = {
   }
 };
 
+// ---------- Table Sorter ----------
+const TableSorter = {
+  _map: new WeakMap(), // table el → { col, dir }
+
+  _state(table) {
+    if (!this._map.has(table)) this._map.set(table, { col: -1, dir: 1 });
+    return this._map.get(table);
+  },
+
+  sort(table, th) {
+    if (!table || !th) return;
+    // Skip non-data columns (Actions, empty headers)
+    const label = th.textContent.replace(/[↑↓⇅]/g, '').trim().toLowerCase();
+    if (!label || label === 'actions') return;
+
+    const headers = Array.from(table.querySelectorAll('thead th'));
+    const col     = headers.indexOf(th);
+    if (col < 0) return;
+
+    const s   = this._state(table);
+    s.dir     = s.col === col ? -s.dir : 1;
+    s.col     = col;
+
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+
+    rows.sort((a, b) => {
+      const aRaw = a.cells[col]?.textContent?.replace(/[↑↓⇅]/g, '').trim() || '';
+      const bRaw = b.cells[col]?.textContent?.replace(/[↑↓⇅]/g, '').trim() || '';
+      // Try numeric comparison first (strip currency symbols/commas)
+      const aNum = parseFloat(aRaw.replace(/[^0-9.-]/g, ''));
+      const bNum = parseFloat(bRaw.replace(/[^0-9.-]/g, ''));
+      if (!isNaN(aNum) && !isNaN(bNum)) return (aNum - bNum) * s.dir;
+      // Date-like strings (YYYY-MM-DD)
+      if (/^\d{4}-\d{2}/.test(aRaw) && /^\d{4}-\d{2}/.test(bRaw)) return aRaw.localeCompare(bRaw) * s.dir;
+      return aRaw.localeCompare(bRaw, undefined, { numeric: true, sensitivity: 'base' }) * s.dir;
+    });
+    rows.forEach(r => tbody.appendChild(r));
+
+    headers.forEach((h, i) => {
+      h.classList.toggle('sort-asc',  i === col && s.dir ===  1);
+      h.classList.toggle('sort-desc', i === col && s.dir === -1);
+      if (i !== col) h.classList.remove('sort-asc', 'sort-desc');
+    });
+  }
+};
+
+// Global sort handler — works for ALL tables, no per-page wiring needed
+document.addEventListener('click', e => {
+  const th = e.target.closest('th');
+  if (th) TableSorter.sort(th.closest('table'), th);
+});
+
 // ---------- Searchable Select (SS) ----------
 const SS = {
   // Generate HTML for a searchable select.

@@ -11,7 +11,7 @@ const DailyParkingPage = {
   async render() {
     [this.data, this.bulkData] = await Promise.all([
       API.get('/daily-parking'),
-      API.get('/daily-parking?vehicle_type=bulk_total')
+      API.get(`/daily-parking?vehicle_type=bulk_total&date_from=${today()}&date_to=${today()}`)
     ]);
     const parked    = this.data.filter(d => d.parking_status === 'parked');
     const completed = this.data.filter(d => d.parking_status === 'completed');
@@ -47,9 +47,9 @@ const DailyParkingPage = {
       <div class="filters-bar">
         <input type="text" class="search-input" id="dp-search" placeholder="Search plate number…">
         <label style="font-size:13px;color:var(--text-muted);white-space:nowrap">From</label>
-        <input type="date" id="dp-from" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+        <input type="date" id="dp-from" value="${today()}" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
         <label style="font-size:13px;color:var(--text-muted);white-space:nowrap">To</label>
-        <input type="date" id="dp-to" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+        <input type="date" id="dp-to" value="${today()}" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
         <button class="btn btn-outline" onclick="DailyParkingPage.clearFilter()"><i class="fas fa-times"></i> Clear</button>
       </div>
 
@@ -538,8 +538,8 @@ const DailyParkingPage = {
 
   clearFilter() {
     document.getElementById('dp-search').value = '';
-    document.getElementById('dp-from').value   = '';
-    document.getElementById('dp-to').value     = '';
+    document.getElementById('dp-from').value   = today();
+    document.getElementById('dp-to').value     = today();
     Router.navigate('daily-parking');
   },
 
