@@ -124,8 +124,8 @@ router.post('/generate-monthly', authenticate, adminOnly, async (req, res) => {
 
     for (const v of vehicles) {
       const invoice_month = v.start_date ? v.start_date.slice(0, 7) : today;
-      // Only generate if vehicle's start_date is this month or earlier (skip future)
-      if (invoice_month > today) { skipped++; continue; }
+      // Skip past months, generate for current month and future
+      if (invoice_month < today) { skipped++; continue; }
       if (existingSet.has(`${v.id}:${invoice_month}`)) { skipped++; continue; }
       maxNum++;
       const inv_num = `${prefix}-${String(maxNum).padStart(5, '0')}`;
