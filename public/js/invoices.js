@@ -172,7 +172,7 @@ const InvoicesPage = {
         veh.map(v => {
           const plan = this.plans.find(p => p.id == v.subscription_plan_id);
           const label = `${escHtml(v.plate_number)} (${escHtml(v.vehicle_type)})${plan ? ' — ' + escHtml(plan.name) : ''}`;
-          return `<option value="${v.id}" data-amount="${v.amount}" data-plan="${v.subscription_plan_id}" data-start="${v.start_date || ''}">${label}</option>`;
+          return `<option value="${v.id}" data-amount="${v.amount}" data-plan="${v.subscription_plan_id || ''}" data-start="${v.start_date || ''}">${label}</option>`;
         }).join('');
       if (vehHint) vehHint.textContent = '';
     }

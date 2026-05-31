@@ -205,7 +205,7 @@ router.post('/', authenticate, async (req, res) => {
 
     const baseInsert = {
       invoice_number: inv_num, client_id, vehicle_id,
-      subscription_plan_id: subscription_plan_id || null,
+      subscription_plan_id: (subscription_plan_id && subscription_plan_id !== 'null') ? Number(subscription_plan_id) : null,
       invoice_month, amount, discount: discount || 0, final_amount,
       due_date: due_date || null,
       payment_status: ps,
