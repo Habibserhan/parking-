@@ -90,23 +90,22 @@ router.get('/unpaid/subscriptions', authenticate, async (req, res) => {
 
 router.post('/generate-monthly', authenticate, adminOnly, async (req, res) => {
   try {
-    const { invoice_month } = req.body;
-    if (!invoice_month) return res.status(400).json({ error: 'Month required (YYYY-MM)' });
+    const today = new Date().toISOString().slice(0, 7); // fallback: current YYYY-MM
 
     const { data: vehicles } = await sb.from('client_vehicles')
-      .select('id, client_id, subscription_plan_id, amount, subscription_plans(price)')
+      .select('id, client_id, subscription_plan_id, amount, start_date, subscription_plans(price)')
       .eq('status', 'active')
       .not('subscription_plan_id', 'is', null);
 
     if (!vehicles || !vehicles.length) return res.json({ generated: 0, skipped: 0 });
 
     const vehicleIds = vehicles.map(v => v.id);
-    const { data: existing } = await sb.from('invoices')
-      .select('vehicle_id')
-      .eq('invoice_month', invoice_month)
-      .in('vehicle_id', vehicleIds);
 
-    const existingSet = new Set((existing || []).map(i => i.vehicle_id));
+    // Fetch all existing invoices for these vehicles so we can skip duplicates per vehicle+month
+    const { data: existing } = await sb.from('invoices')
+      .select('vehicle_id, invoice_month')
+      .in('vehicle_id', vehicleIds);
+    const existingSet = new Set((existing || []).map(i => `${i.vehicle_id}:${i.invoice_month}`));
 
     const { data: settings } = await sb.from('settings').select('invoice_prefix').eq('id', 1).maybeSingle();
     const prefix = settings?.invoice_prefix || 'INV';
@@ -121,7 +120,10 @@ router.post('/generate-monthly', authenticate, adminOnly, async (req, res) => {
     const toInsert = [];
 
     for (const v of vehicles) {
-      if (existingSet.has(v.id)) { skipped++; continue; }
+      const invoice_month = v.start_date ? v.start_date.slice(0, 7) : today;
+      // Only generate if vehicle's start_date is in the current month and year
+      if (invoice_month !== today) { skipped++; continue; }
+      if (existingSet.has(`${v.id}:${invoice_month}`)) { skipped++; continue; }
       maxNum++;
       const inv_num = `${prefix}-${String(maxNum).padStart(5, '0')}`;
       const amount = Number(v.amount) || Number(v.subscription_plans?.price) || 0;
@@ -134,7 +136,7 @@ router.post('/generate-monthly', authenticate, adminOnly, async (req, res) => {
         amount,
         discount: 0,
         final_amount: amount,
-        due_date: `${invoice_month}-28`,
+        due_date: v.start_date ? v.start_date.slice(0, 7) + '-28' : `${today}-28`,
         payment_status: 'unpaid'
       });
       generated++;
@@ -215,14 +217,11 @@ router.post('/', authenticate, async (req, res) => {
       prorated_start_date: prorated_start_date || null
     };
 
-    // Try with all optional columns; strip any that don't exist in the DB yet
+    // Try with all optional columns; strip all that don't exist in the DB yet
     let { data, error } = await sb.from('invoices').insert({ ...baseInsert, paid_amount: resolved_paid }).select('id').single();
     if (isMissingColumnError(error)) {
-      const fallback = { ...baseInsert, paid_amount: resolved_paid };
-      for (const col of ['paid_amount', 'is_prorated', 'prorated_start_date']) {
-        if ((error.message || '').includes(col)) delete fallback[col];
-      }
-      ({ data, error } = await sb.from('invoices').insert(fallback).select('id').single());
+      const { currency: _c, is_prorated: _ip, prorated_start_date: _psd, paid_amount: _pa, ...safeInsert } = { ...baseInsert, paid_amount: resolved_paid };
+      ({ data, error } = await sb.from('invoices').insert(safeInsert).select('id').single());
     }
     if (error) return res.status(400).json({ error: error.message });
     res.status(201).json({ id: data.id, invoice_number: inv_num });
@@ -254,14 +253,11 @@ router.put('/:id', authenticate, async (req, res) => {
       prorated_start_date: prorated_start_date || null
     };
 
-    // Try with all optional columns; strip any that don't exist in the DB yet
+    // Try with all optional columns; strip all that don't exist in the DB yet
     let result = await sb.from('invoices').update({ ...baseFields, paid_amount: resolved_paid }).eq('id', req.params.id);
     if (isMissingColumnError(result.error)) {
-      const fallback = { ...baseFields, paid_amount: resolved_paid };
-      for (const col of ['paid_amount', 'is_prorated', 'prorated_start_date']) {
-        if ((result.error.message || '').includes(col)) delete fallback[col];
-      }
-      result = await sb.from('invoices').update(fallback).eq('id', req.params.id);
+      const { currency: _c, is_prorated: _ip, prorated_start_date: _psd, paid_amount: _pa, ...safeFields } = { ...baseFields, paid_amount: resolved_paid };
+      result = await sb.from('invoices').update(safeFields).eq('id', req.params.id);
     }
     if (result.error) return res.status(400).json({ error: result.error.message });
     res.json({ message: 'Invoice updated' });

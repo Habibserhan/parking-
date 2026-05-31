@@ -172,7 +172,7 @@ const InvoicesPage = {
         veh.map(v => {
           const plan = this.plans.find(p => p.id == v.subscription_plan_id);
           const label = `${escHtml(v.plate_number)} (${escHtml(v.vehicle_type)})${plan ? ' — ' + escHtml(plan.name) : ''}`;
-          return `<option value="${v.id}" data-amount="${v.amount}" data-plan="${v.subscription_plan_id}">${label}</option>`;
+          return `<option value="${v.id}" data-amount="${v.amount}" data-plan="${v.subscription_plan_id}" data-start="${v.start_date || ''}">${label}</option>`;
         }).join('');
       if (vehHint) vehHint.textContent = '';
     }
@@ -180,9 +180,15 @@ const InvoicesPage = {
 
   fillFromVehicle() {
     const opt = document.getElementById('inv-vehicle')?.options[document.getElementById('inv-vehicle').selectedIndex];
-    if (opt && opt.dataset.amount) {
+    if (opt && opt.value) {
       const cur = document.querySelector('#modal-form [name=currency]')?.value || 'USD';
-      document.getElementById('inv-amount').value = fmtAmountInput(opt.dataset.amount, cur);
+      if (opt.dataset.amount != null) document.getElementById('inv-amount').value = fmtAmountInput(opt.dataset.amount, cur);
+      const monthInput = document.querySelector('#modal-form [name=invoice_month]');
+      if (monthInput && opt.dataset.start) {
+        const startMonth = opt.dataset.start.slice(0, 7);
+        monthInput.min = startMonth;
+        if (!monthInput.value || monthInput.value < startMonth) monthInput.value = startMonth;
+      }
       this.calcFinal();
     }
   },
@@ -326,10 +332,9 @@ const InvoicesPage = {
   },
 
   async generateMonthly() {
-    const month = document.getElementById('inv-month')?.value || currentMonth();
-    if (!confirm(`Generate invoices for all active clients for ${month}?`)) return;
+    if (!confirm('Generate invoices for all active vehicles based on each vehicle\'s registration date?')) return;
     try {
-      const res = await API.post('/invoices/generate-monthly', { invoice_month: month });
+      const res = await API.post('/invoices/generate-monthly', {});
       Toast.success(`Generated: ${res.generated} invoices, Skipped: ${res.skipped}`);
       this.applyFilter();
     } catch (e) { Toast.error(e.message); }
@@ -341,7 +346,7 @@ const InvoicesPage = {
     const month  = document.getElementById('inv-month')?.value;
     const status = document.getElementById('inv-status')?.value;
     if (search) params.set('search', search);
-    if (month)  params.set('invoice_month', month);
+    if (month && !search) params.set('invoice_month', month);
     if (status) params.set('payment_status', status);
     this.data = await API.get(`/invoices?${params}`);
     document.getElementById('inv-table').innerHTML = this.renderTable(this.data);
