@@ -39,11 +39,11 @@ const UnpaidPage = {
   },
 
   renderTable(rows) {
-    if (!rows.length) return `<div class="empty-state"><i class="fas fa-check-circle text-success"></i><h4>All Paid!</h4><p>All active clients have paid for this month.</p></div>`;
+    if (!rows.length) return `<div class="empty-state"><i class="fas fa-check-circle text-success"></i><h4>All Paid!</h4><p>No unpaid invoices found for the selected period.</p></div>`;
     return `<table>
       <thead><tr>
         <th>Client</th><th>Mobile</th><th>Plate</th><th>Vehicle</th><th>Plan</th>
-        <th>Amount Due</th><th>Due Date</th><th>Invoice</th><th>Actions</th>
+        <th>Month</th><th>Amount Due</th><th>Due Date</th><th>Status</th><th>Invoice</th><th>Actions</th>
       </tr></thead>
       <tbody>${rows.map(r => `<tr>
         <td><strong>${escHtml(r.full_name)}</strong></td>
@@ -51,8 +51,10 @@ const UnpaidPage = {
         <td><strong>${escHtml(r.plate_number)}</strong></td>
         <td>${vehicleBadge(r.vehicle_type)}</td>
         <td class="text-muted">${escHtml(r.plan_name || '—')}</td>
+        <td class="text-muted">${escHtml(r.invoice_month || '—')}</td>
         <td class="fw-bold text-danger">${fmtRaw(r.final_amount || r.amount, r.currency)}</td>
         <td>${r.due_date ? `<span class="${r.due_date < today() ? 'text-danger' : ''}">${fmtDate(r.due_date)}</span>` : '—'}</td>
+        <td>${statusBadge(r.payment_status || 'unpaid')}</td>
         <td>${r.invoice_number ? `<span class="badge badge-warning">${escHtml(r.invoice_number)}</span>` : '<span class="badge badge-gray">No Invoice</span>'}</td>
         <td class="actions">
           ${r.invoice_id

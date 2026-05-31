@@ -90,9 +90,17 @@ const DailyParkingPage = {
             <p class="text-muted" style="margin-bottom:16px;font-size:13px"><i class="fas fa-info-circle" style="margin-right:5px"></i>Use this when you don't have time to enter every car. Record the total daily parking amount as a single entry.</p>
             <div class="form-row cols-2" style="max-width:640px">
               <div class="form-group"><label>Date *</label><input type="date" id="bulk-date" value="${today()}" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;width:100%"></div>
+              <div class="form-group"><label><i class="fas fa-building" style="color:var(--primary);margin-right:5px"></i>Company</label>
+                <select id="bulk-company" onchange="DailyParkingPage._onBulkCompanyChange()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;width:100%">
+                  <option value="">— Manual Entry —</option>
+                  ${(() => { try { const p = JSON.parse(window.appSettings?.custom_rates||'{}'); return (Array.isArray(p.__thirdParties)?p.__thirdParties:[]).map(c=>`<option value="${escHtml(c.name)}" data-rate="${c.rate||0}" data-currency="${c.currency||'USD'}">${escHtml(c.name)}</option>`).join(''); } catch { return ''; } })()}
+                </select>
+              </div>
+              <div class="form-group" id="bulk-qty-group" style="display:none"><label>Quantity *</label><input type="number" id="bulk-qty" min="1" value="1" oninput="DailyParkingPage._onBulkQtyChange()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;width:100%"></div>
+              <div class="form-group" id="bulk-rate-info" style="display:none;align-items:flex-end"><div style="padding:8px 12px;background:var(--bg);border-radius:8px;border:1.5px solid var(--border);font-size:13px;color:var(--text-muted);width:100%" id="bulk-rate-text"></div></div>
               <div class="form-group"><label>Amount *</label><input type="text" inputmode="numeric" id="bulk-amount" placeholder="Enter total amount" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;width:100%"></div>
               <div class="form-group"><label>Currency</label><select id="bulk-currency" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;width:100%">${Object.entries(_getCurrencyMap()).map(([c,cfg])=>`<option value="${c}">${cfg.symbol} — ${cfg.name||c}</option>`).join('')}</select></div>
-              <div class="form-group"><label>Notes</label><input type="text" id="bulk-notes" placeholder="Optional notes…" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;width:100%"></div>
+              <div class="form-group" style="grid-column:1/-1"><label>Notes</label><input type="text" id="bulk-notes" placeholder="Optional notes…" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;width:100%"></div>
             </div>
             <button class="btn btn-primary" onclick="DailyParkingPage.saveBulk()"><i class="fas fa-plus"></i> Add Entry</button>
           </div>
@@ -151,6 +159,17 @@ const DailyParkingPage = {
         const cur = sel.value;
         sel.innerHTML = Object.entries(_getCurrencyMap()).map(([c,cfg])=>`<option value="${c}" ${c===cur?'selected':''}>${cfg.symbol} — ${cfg.name||c}</option>`).join('');
       }
+      // Rebuild company options
+      const compSel = document.getElementById('bulk-company');
+      if (compSel) {
+        const prev = compSel.value;
+        try {
+          const p = JSON.parse(window.appSettings?.custom_rates || '{}');
+          const opts = (Array.isArray(p.__thirdParties) ? p.__thirdParties : [])
+            .map(c => `<option value="${escHtml(c.name)}" data-rate="${c.rate||0}" data-currency="${c.currency||'USD'}" ${c.name===prev?'selected':''}>${escHtml(c.name)}</option>`).join('');
+          compSel.innerHTML = `<option value="">— Manual Entry —</option>${opts}`;
+        } catch {}
+      }
     }
     const cur = this._currency;
     const toggleHtml = `<div style="display:flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;height:38px">
@@ -163,30 +182,80 @@ const DailyParkingPage = {
       : '');
   },
 
+  _onBulkCompanyChange() {
+    const sel       = document.getElementById('bulk-company');
+    const qtyGroup  = document.getElementById('bulk-qty-group');
+    const rateInfo  = document.getElementById('bulk-rate-info');
+    const rateText  = document.getElementById('bulk-rate-text');
+    const amountEl  = document.getElementById('bulk-amount');
+    const currencyEl = document.getElementById('bulk-currency');
+    if (!sel?.value) {
+      if (qtyGroup)  qtyGroup.style.display  = 'none';
+      if (rateInfo)  rateInfo.style.display  = 'none';
+      return;
+    }
+    try {
+      const parsed  = JSON.parse(window.appSettings?.custom_rates || '{}');
+      const company = (parsed.__thirdParties || []).find(c => c.name === sel.value);
+      if (!company) return;
+      const rate = Number(company.rate) || 0;
+      const cur  = company.currency || 'USD';
+      if (currencyEl) currencyEl.value = cur;
+      const qty  = parseInt(document.getElementById('bulk-qty')?.value) || 1;
+      if (amountEl)  amountEl.value = fmtAmountInput(rate * qty, cur);
+      if (qtyGroup)  qtyGroup.style.display  = '';
+      if (rateInfo)  rateInfo.style.display  = 'flex';
+      if (rateText)  rateText.textContent = `Rate: ${fmtRaw(rate, cur)} × ${qty} = ${fmtRaw(rate * qty, cur)}`;
+    } catch {}
+  },
+
+  _onBulkQtyChange() {
+    const sel = document.getElementById('bulk-company');
+    if (!sel?.value) return;
+    try {
+      const parsed  = JSON.parse(window.appSettings?.custom_rates || '{}');
+      const company = (parsed.__thirdParties || []).find(c => c.name === sel.value);
+      if (!company) return;
+      const rate     = Number(company.rate) || 0;
+      const cur      = company.currency || 'USD';
+      const qty      = parseInt(document.getElementById('bulk-qty')?.value) || 1;
+      const amountEl = document.getElementById('bulk-amount');
+      const rateText = document.getElementById('bulk-rate-text');
+      if (amountEl) amountEl.value = fmtAmountInput(rate * qty, cur);
+      if (rateText) rateText.textContent = `Rate: ${fmtRaw(rate, cur)} × ${qty} = ${fmtRaw(rate * qty, cur)}`;
+    } catch {}
+  },
+
   async saveBulk() {
-    const date   = document.getElementById('bulk-date')?.value;
-    const amount = parseAmountInput(document.getElementById('bulk-amount')?.value);
-    const cur    = document.getElementById('bulk-currency')?.value || 'USD';
-    const notes  = document.getElementById('bulk-notes')?.value || '';
+    const date    = document.getElementById('bulk-date')?.value;
+    const amount  = parseAmountInput(document.getElementById('bulk-amount')?.value);
+    const cur     = document.getElementById('bulk-currency')?.value || 'USD';
+    const notes   = document.getElementById('bulk-notes')?.value || '';
+    const company = document.getElementById('bulk-company')?.value || '';
     if (!date)   { Toast.error('Date is required'); return; }
     if (!amount) { Toast.error('Amount is required'); return; }
     const saveCfg  = _getCurrencyMap()[cur] || {};
     const saveMult = saveCfg.multiplier || 1;
     try {
       await API.post('/daily-parking', {
-        plate_number:    'BULK',
-        vehicle_type:    'bulk_total',
-        parking_status:  'completed',
-        payment_status:  'paid',
-        entry_time:      `${date}T12:00:00`,
-        exit_time:       `${date}T12:00:00`,
-        duration_minutes: 0,
-        amount:          amount / saveMult,
-        currency:        cur,
-        notes
+        plate_number:        'BULK',
+        vehicle_type:        'bulk_total',
+        parking_status:      'completed',
+        payment_status:      'paid',
+        entry_time:          `${date}T12:00:00`,
+        exit_time:           `${date}T12:00:00`,
+        duration_minutes:    0,
+        amount:              amount / saveMult,
+        currency:            cur,
+        notes,
+        third_party_company: company || null
       });
-      document.getElementById('bulk-amount').value = '';
-      document.getElementById('bulk-notes').value  = '';
+      document.getElementById('bulk-amount').value  = '';
+      document.getElementById('bulk-notes').value   = '';
+      document.getElementById('bulk-company').value = '';
+      document.getElementById('bulk-qty').value     = '1';
+      document.getElementById('bulk-qty-group').style.display  = 'none';
+      document.getElementById('bulk-rate-info').style.display  = 'none';
       Toast.success('Bulk entry added');
       await this.loadBulkData();
     } catch (e) { Toast.error(e.message); }
@@ -208,9 +277,10 @@ const DailyParkingPage = {
   renderBulk(rows) {
     if (!rows.length) return `<div class="empty-state" style="padding:30px"><i class="fas fa-calculator"></i><h4>No bulk entries</h4><p>Use the form above to add a daily total.</p></div>`;
     return `<table>
-      <thead><tr><th>Date</th><th>Amount</th><th>Currency</th><th>Notes</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Date</th><th>Company</th><th>Amount</th><th>Currency</th><th>Notes</th><th>Actions</th></tr></thead>
       <tbody>${rows.map(r => `<tr>
         <td>${fmtDate(r.entry_time)}</td>
+        <td>${r.third_party_company ? `<span class="badge badge-purple">${escHtml(r.third_party_company)}</span>` : '<span class="text-muted">—</span>'}</td>
         <td class="fw-bold">${fmtAmt(r.amount, r.currency)}</td>
         <td><span class="badge badge-gray">${escHtml(r.currency)}</span></td>
         <td class="text-muted">${escHtml(r.notes || '—')}</td>
@@ -222,7 +292,7 @@ const DailyParkingPage = {
   },
 
   async deleteBulk(id) {
-    if (!confirmDelete()) return;
+    if (!await confirmDelete()) return;
     await API.delete(`/daily-parking/${id}`);
     Toast.success('Entry deleted');
     await this.loadBulkData();
@@ -474,7 +544,7 @@ const DailyParkingPage = {
   },
 
   async deleteRecord(id) {
-    if (!confirmDelete()) return;
+    if (!await confirmDelete()) return;
     await API.delete(`/daily-parking/${id}`);
     Toast.success('Record deleted'); Router.navigate('daily-parking');
   }

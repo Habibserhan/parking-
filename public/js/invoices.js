@@ -4,10 +4,12 @@
 const InvoicesPage = {
   title: 'Invoices',
   data: [],
+  _baseData: [],  // full unfiltered set — used for counts
   clients: [],
   vehicles: [],
   plans: [],
   _currency: 'USD',
+  _status: '',
 
   async render() {
     [this.data, this.clients, this.vehicles, this.plans] = await Promise.all([
@@ -16,6 +18,7 @@ const InvoicesPage = {
       API.get('/clients/all/vehicles'),
       API.get('/plans?active=true')
     ]);
+    this._baseData = this.data;
     return `
       <div class="page-header">
         <div class="page-title"><h2>Invoices</h2><p>Manage subscription billing and payments</p></div>
@@ -36,12 +39,7 @@ const InvoicesPage = {
       <div class="filters-bar">
         <input type="text" class="search-input" id="inv-search" placeholder="Search client, plate, invoice#…">
         <input type="month" id="inv-month" value="${currentMonth()}">
-        <select id="inv-status">
-          <option value="">All Status</option>
-          <option value="unpaid">Unpaid</option>
-          <option value="paid">Paid</option>
-          <option value="partially_paid">Partial</option>
-        </select>
+        <div id="inv-filter-btns" style="display:flex;gap:4px">${this._renderStatusBtns()}</div>
         <button class="btn btn-outline" onclick="InvoicesPage.exportReport()"><i class="fas fa-download"></i> Export</button>
       </div>
       <div class="card">
@@ -52,7 +50,34 @@ const InvoicesPage = {
   init() {
     document.getElementById('inv-search').addEventListener('input',  () => this.applyFilter());
     document.getElementById('inv-month').addEventListener('change',  () => this.applyFilter());
-    document.getElementById('inv-status').addEventListener('change', () => this.applyFilter());
+  },
+
+  _renderStatusBtns() {
+    const counts = {
+      '':              this._baseData.length,
+      'unpaid':        this._baseData.filter(i => i.payment_status === 'unpaid').length,
+      'paid':          this._baseData.filter(i => i.payment_status === 'paid').length,
+      'partially_paid':this._baseData.filter(i => i.payment_status === 'partially_paid').length,
+    };
+    const badgeColors = { '': '#6b7280', 'unpaid': '#ef4444', 'paid': '#22c55e', 'partially_paid': '#f59e0b' };
+    return [['','All'],['unpaid','Unpaid'],['paid','Paid'],['partially_paid','Partial']].map(([val, label]) => {
+      const active = this._status === val;
+      const cnt    = counts[val] ?? 0;
+      const badgeBg = active ? 'rgba(255,255,255,.25)' : (badgeColors[val] || '#6b7280');
+      const badgeColor = active ? '#fff' : '#fff';
+      return `<button id="inv-st-${val||'all'}" onclick="InvoicesPage.setStatus('${val}')"
+        style="display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;border:1.5px solid ${active?'var(--primary)':'var(--border)'};background:${active?'var(--primary)':'transparent'};color:${active?'#fff':'var(--text)'};font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;transition:.15s">
+        ${label}
+        <span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:${badgeBg};color:${badgeColor};font-size:11px;font-weight:700">${cnt}</span>
+      </button>`;
+    }).join('');
+  },
+
+  setStatus(val) {
+    this._status = val;
+    const container = document.getElementById('inv-filter-btns');
+    if (container) container.innerHTML = this._renderStatusBtns();
+    this.applyFilter();
   },
 
   _fmtTotal(data) {
@@ -98,12 +123,12 @@ const InvoicesPage = {
   },
 
   _formHtml(inv = {}) {
-    const clientOpts  = this.clients.map(c => `<option value="${c.id}" ${inv.client_id==c.id?'selected':''}>${escHtml(c.full_name)}</option>`).join('');
-    const isProrated  = !!inv.is_prorated;
-    const billingType = isProrated ? 'prorated' : 'full';
+    const clientSSOpts = [{ value: '', label: 'Select client…' }, ...this.clients.map(c => ({ value: String(c.id), label: c.full_name }))];
+    const isProrated   = !!inv.is_prorated;
+    const billingType  = isProrated ? 'prorated' : 'full';
     return `<form id="modal-form"><div class="form-row cols-2">
       <div class="form-group"><label>Client *</label>
-        <select name="client_id" required id="inv-client" onchange="InvoicesPage.loadClientVehicles()">${clientOpts ? `<option value="">Select client</option>${clientOpts}` : '<option>No clients</option>'}</select>
+        ${SS.html('client_id', clientSSOpts, String(inv.client_id || ''), { id: 'inv-client', onchange: 'InvoicesPage.loadClientVehicles()' })}
       </div>
       <div class="form-group"><label>Vehicle *</label>
         <select name="vehicle_id" required id="inv-vehicle" onchange="InvoicesPage.fillFromVehicle()"><option value="">Select vehicle</option></select>
@@ -159,7 +184,7 @@ const InvoicesPage = {
   },
 
   loadClientVehicles() {
-    const clientId = document.getElementById('inv-client')?.value;
+    const clientId = document.querySelector('#inv-client input[type=hidden]')?.value;
     const vehSel   = document.getElementById('inv-vehicle');
     const vehHint  = document.getElementById('inv-vehicle-hint');
     if (!vehSel) return;
@@ -332,9 +357,10 @@ const InvoicesPage = {
   },
 
   async generateMonthly() {
-    if (!confirm('Generate invoices for all active vehicles based on each vehicle\'s registration date?')) return;
+    const month = document.getElementById('inv-month')?.value || currentMonth();
+    if (!await ConfirmDialog.show(`Generate invoices for all active vehicles for ${month}?`, { confirmLabel: 'Generate', title: 'Generate Monthly Invoices' })) return;
     try {
-      const res = await API.post('/invoices/generate-monthly', {});
+      const res = await API.post('/invoices/generate-monthly', { invoice_month: month });
       Toast.success(`Generated: ${res.generated} invoices, Skipped: ${res.skipped}`);
       this.applyFilter();
     } catch (e) { Toast.error(e.message); }
@@ -344,14 +370,20 @@ const InvoicesPage = {
     const params = new URLSearchParams();
     const search = document.getElementById('inv-search')?.value;
     const month  = document.getElementById('inv-month')?.value;
-    const status = document.getElementById('inv-status')?.value;
     if (search) params.set('search', search);
     if (month && !search) params.set('invoice_month', month);
-    if (status) params.set('payment_status', status);
-    this.data = await API.get(`/invoices?${params}`);
+    // Always fetch without status filter to get accurate counts for all tabs
+    this._baseData = await API.get(`/invoices?${params}`);
+    // Filter client-side by selected status
+    this.data = this._status
+      ? this._baseData.filter(i => i.payment_status === this._status)
+      : this._baseData;
     document.getElementById('inv-table').innerHTML = this.renderTable(this.data);
     const badge = document.getElementById('inv-total');
     if (badge) badge.textContent = this._fmtTotal(this.data);
+    // Refresh button counts
+    const container = document.getElementById('inv-filter-btns');
+    if (container) container.innerHTML = this._renderStatusBtns();
   },
 
   async printInvoice(id) {
@@ -440,7 +472,7 @@ const InvoicesPage = {
   },
 
   async deleteRecord(id) {
-    if (!confirmDelete()) return;
+    if (!await confirmDelete()) return;
     await API.delete(`/invoices/${id}`);
     Toast.success('Deleted'); this.applyFilter();
   },

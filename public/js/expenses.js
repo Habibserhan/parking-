@@ -210,7 +210,7 @@ const ExpensesPage = {
   },
 
   async deleteRecord(id) {
-    if (!confirmDelete()) return;
+    if (!await confirmDelete()) return;
     await API.delete(`/expenses/${id}`);
     Toast.success('Deleted'); Router.navigate('expenses');
   },

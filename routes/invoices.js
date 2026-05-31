@@ -40,74 +40,91 @@ function flattenInvoice(i) {
 
 router.get('/unpaid/subscriptions', authenticate, async (req, res) => {
   try {
-    const today = new Date().toISOString().slice(0, 10);
-    const dateFrom = req.query.date_from || new Date().toISOString().slice(0, 7) + '-01';
-    const dateTo   = req.query.date_to   || today;
+    const todayStr  = new Date().toISOString().slice(0, 10);
+    const dateFrom  = req.query.date_from || todayStr.slice(0, 7) + '-01';
+    const dateTo    = req.query.date_to   || todayStr;
     const monthFrom = dateFrom.slice(0, 7);
     const monthTo   = dateTo.slice(0, 7);
 
+    // All active vehicles
     const { data: vehicles } = await sb.from('client_vehicles')
-      .select('id, plate_number, vehicle_type, amount, currency, client_id, start_date, clients(id, full_name, mobile), subscription_plans(name)')
+      .select('id, plate_number, vehicle_type, amount, currency, client_id, clients(id, full_name, mobile), subscription_plans(name)')
       .eq('status', 'active');
 
     if (!vehicles || !vehicles.length) return res.json([]);
 
     const vehicleIds = vehicles.map(v => v.id);
+
+    // Fetch only unpaid/partially_paid invoices within the requested month range
     const { data: invoices } = await sb.from('invoices')
       .select('id, vehicle_id, invoice_number, payment_status, final_amount, currency, due_date, invoice_month')
-      .in('vehicle_id', vehicleIds);
+      .in('vehicle_id', vehicleIds)
+      .gte('invoice_month', monthFrom)
+      .lte('invoice_month', monthTo)
+      .neq('payment_status', 'paid');
 
-    // Map invoices by vehicle_id + invoice_month
-    const invoiceMap = {};
-    (invoices || []).forEach(i => { invoiceMap[`${i.vehicle_id}:${i.invoice_month}`] = i; });
+    if (!invoices || !invoices.length) return res.json([]);
 
-    const nowB = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Beirut' }));
-    const currentMonth = `${nowB.getFullYear()}-${String(nowB.getMonth() + 1).padStart(2, '0')}`;
-    const rows = vehicles
-      .map(v => {
-        const vehicleMonth = v.start_date ? v.start_date.slice(0, 7) : currentMonth;
-        const inv = invoiceMap[`${v.id}:${vehicleMonth}`] || null;
-        return {
-          vehicle_id:     v.id,
-          plate_number:   v.plate_number,
-          vehicle_type:   v.vehicle_type,
-          amount:         v.amount,
-          client_id:      v.clients?.id,
-          full_name:      v.clients?.full_name || '',
-          mobile:         v.clients?.mobile    || '',
-          plan_name:      v.subscription_plans?.name || null,
-          invoice_id:     inv?.id             || null,
-          invoice_number: inv?.invoice_number || null,
-          payment_status: inv?.payment_status || null,
-          final_amount:   inv?.final_amount   || null,
-          due_date:       inv?.due_date       || null
-        };
-      })
-      .filter(r => r.invoice_id && r.payment_status !== 'paid');
+    // Build vehicle lookup for quick access
+    const vehicleMap = {};
+    vehicles.forEach(v => { vehicleMap[v.id] = v; });
 
-    rows.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
+    const rows = invoices.map(inv => {
+      const v = vehicleMap[inv.vehicle_id];
+      if (!v) return null;
+      return {
+        vehicle_id:     v.id,
+        plate_number:   v.plate_number,
+        vehicle_type:   v.vehicle_type,
+        amount:         v.amount,
+        currency:       inv.currency || v.currency,
+        client_id:      v.clients?.id,
+        full_name:      v.clients?.full_name || '',
+        mobile:         v.clients?.mobile    || '',
+        plan_name:      v.subscription_plans?.name || null,
+        invoice_id:     inv.id,
+        invoice_number: inv.invoice_number,
+        payment_status: inv.payment_status,
+        final_amount:   inv.final_amount,
+        due_date:       inv.due_date,
+        invoice_month:  inv.invoice_month
+      };
+    }).filter(Boolean);
+
+    rows.sort((a, b) => (a.invoice_month || '').localeCompare(b.invoice_month || '') || (a.full_name || '').localeCompare(b.full_name || ''));
     res.json(rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 router.post('/generate-monthly', authenticate, adminOnly, async (req, res) => {
   try {
-    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Beirut' }));
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const { invoice_month } = req.body;
+    if (!invoice_month) return res.status(400).json({ error: 'Month required (YYYY-MM)' });
 
-    const { data: vehicles } = await sb.from('client_vehicles')
+    // All active vehicles — regardless of when they started
+    const { data: allVehicles } = await sb.from('client_vehicles')
       .select('id, client_id, subscription_plan_id, amount, start_date, subscription_plans(price)')
       .eq('status', 'active');
 
-    if (!vehicles || !vehicles.length) return res.json({ generated: 0, skipped: 0 });
+    if (!allVehicles?.length) return res.json({ generated: 0, skipped: 0 });
+
+    // Only bill vehicles whose subscription has already started by the invoice month.
+    // A vehicle with start_date 2026-06-15 IS included when billing for 2026-06.
+    // A vehicle with start_date 2026-07-01 is NOT included when billing for 2026-06.
+    const vehicles = allVehicles.filter(v =>
+      !v.start_date || v.start_date.slice(0, 7) <= invoice_month
+    );
+
+    if (!vehicles.length) return res.json({ generated: 0, skipped: 0 });
 
     const vehicleIds = vehicles.map(v => v.id);
 
-    // Fetch all existing invoices for these vehicles so we can skip duplicates per vehicle+month
+    // Skip duplicates: same vehicle + same invoice_month already exists
     const { data: existing } = await sb.from('invoices')
-      .select('vehicle_id, invoice_month')
+      .select('vehicle_id')
+      .eq('invoice_month', invoice_month)
       .in('vehicle_id', vehicleIds);
-    const existingSet = new Set((existing || []).map(i => `${i.vehicle_id}:${i.invoice_month}`));
+    const existingSet = new Set((existing || []).map(i => i.vehicle_id));
 
     const { data: settings } = await sb.from('settings').select('invoice_prefix').eq('id', 1).maybeSingle();
     const prefix = settings?.invoice_prefix || 'INV';
@@ -122,24 +139,20 @@ router.post('/generate-monthly', authenticate, adminOnly, async (req, res) => {
     const toInsert = [];
 
     for (const v of vehicles) {
-      const invoice_month = v.start_date ? v.start_date.slice(0, 7) : today;
-      // Skip past months, generate for current month and future
-      if (invoice_month < today) { skipped++; continue; }
-      if (existingSet.has(`${v.id}:${invoice_month}`)) { skipped++; continue; }
+      if (existingSet.has(v.id)) { skipped++; continue; }
       maxNum++;
-      const inv_num = `${prefix}-${String(maxNum).padStart(5, '0')}`;
       const amount = Number(v.amount) || Number(v.subscription_plans?.price) || 0;
       toInsert.push({
-        invoice_number: inv_num,
-        client_id: v.client_id,
-        vehicle_id: v.id,
-        subscription_plan_id: v.subscription_plan_id,
-        invoice_month,
+        invoice_number:       `${prefix}-${String(maxNum).padStart(5, '0')}`,
+        client_id:            v.client_id,
+        vehicle_id:           v.id,
+        subscription_plan_id: v.subscription_plan_id || null,
+        invoice_month,                          // always the selected billing month
         amount,
-        discount: 0,
-        final_amount: amount,
-        due_date: v.start_date ? v.start_date.slice(0, 7) + '-28' : `${today}-28`,
-        payment_status: 'unpaid'
+        discount:             0,
+        final_amount:         amount,
+        due_date:             `${invoice_month}-28`,
+        payment_status:       'unpaid'
       });
       generated++;
     }

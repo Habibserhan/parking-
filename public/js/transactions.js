@@ -25,6 +25,7 @@ const TransactionsPage = {
               style="padding:0 14px;border:none;background:${this._currency==='LBP'?'var(--primary)':'transparent'};color:${this._currency==='LBP'?'#fff':'var(--text-muted)'};font-weight:700;cursor:pointer;font-size:13px;transition:.15s">LL LBP</button>
           </div>
           <span id="tx-total" class="badge badge-success" style="font-size:14px;padding:8px 14px">${this._fmtTotal(this.data)}</span>
+          <button class="btn btn-outline" onclick="TransactionsPage.showBulkTip()"><i class="fas fa-coins"></i> Record Tips</button>
           <button class="btn btn-primary" onclick="TransactionsPage.showAdd()"><i class="fas fa-plus"></i> New Service</button>
         </div>
       </div>
@@ -149,9 +150,10 @@ const TransactionsPage = {
     }
     const tipAmount = isPaid ? Math.max(0, converted - serviceTotal) : 0;
 
-    const svcOpts = this.services.map(s =>
-      `<option value="${s.id}" data-price="${s.price}" data-currency="${s.currency||'USD'}" ${t.service_id==s.id?'selected':''}>${escHtml(s.name)} (${fmtRaw(s.price, s.currency)})</option>`
-    ).join('');
+    const defaultVt  = t.vehicle_type || 'car';
+    const filteredSvcs = this.services.filter(s => s.vehicle_type === defaultVt || s.vehicle_type === 'both');
+    const svcSSOpts  = filteredSvcs.map(s => ({ value: String(s.id), label: `${s.name} (${fmtRaw(s.price, s.currency)})` }));
+    const selSvcId   = t.service_id ? String(t.service_id) : (svcSSOpts[0]?.value || '');
 
     return `<form id="modal-form"><div class="form-row cols-2">
       <div class="form-group"><label>Service Date</label>
@@ -167,10 +169,10 @@ const TransactionsPage = {
         <input name="plate_number" value="${escHtml(t.plate_number||'')}" placeholder="ABC 1234">
       </div>
       <div class="form-group"><label>Vehicle Type</label>
-        <select name="vehicle_type">${vehicleTypeOptions(t.vehicle_type||'car')}</select>
+        <select name="vehicle_type" id="tx-veh-type" onchange="TransactionsPage.onVehicleTypeChange()">${vehicleTypeOptions(defaultVt)}</select>
       </div>
       <div class="form-group" style="grid-column:1/-1"><label>Service</label>
-        <select name="service_id" id="tx-service-sel" onchange="TransactionsPage.fillPrice()">${svcOpts}</select>
+        ${SS.html('service_id', svcSSOpts, selSvcId, { id: 'tx-service-ss', onchange: 'TransactionsPage.fillPrice()' })}
       </div>
       <div class="form-group"><label>Unit Price</label>
         <input name="price" type="text" inputmode="numeric" id="tx-price"
@@ -352,20 +354,54 @@ const TransactionsPage = {
   },
 
   fillPrice() {
-    const sel = document.getElementById('tx-service-sel');
-    const opt = sel?.options[sel.selectedIndex];
-    if (!opt?.dataset.price) return;
-    const cur    = opt.dataset.currency || 'USD';
+    const svcId = document.querySelector('#tx-service-ss input[type=hidden]')?.value;
+    const svc   = this.services.find(s => String(s.id) === String(svcId));
+    if (!svc) return;
+    const cur    = svc.currency || 'USD';
     const svcSel = document.getElementById('tx-svc-currency');
     const paySel = document.getElementById('tx-pay-currency');
-    document.getElementById('tx-price').value = fmtAmountInput(opt.dataset.price, cur);
-    // Both service and payment currency default to service's own currency
+    document.getElementById('tx-price').value = fmtAmountInput(svc.price, cur);
     if (svcSel) svcSel.value = cur;
     if (paySel) paySel.value = cur;
     const qtyEl = document.getElementById('tx-qty');
     if (qtyEl) qtyEl.value = 1;
     this._calcTxTotal();
-    this._onCurrencyChange(); // hide rate row since same currency
+    this._onCurrencyChange();
+  },
+
+  onVehicleTypeChange() {
+    const vt       = document.getElementById('tx-veh-type')?.value || 'car';
+    const filtered = this.services.filter(s => s.vehicle_type === vt || s.vehicle_type === 'both');
+    const opts     = filtered.map(s => ({ value: String(s.id), label: `${s.name} (${fmtRaw(s.price, s.currency)})` }));
+    SS.update('tx-service-ss', opts, opts[0]?.value || '');
+    this.fillPrice();
+  },
+
+  showBulkTip() {
+    Modal.show({ title: 'Record Bulk Tips', size: 'sm', body: `<form id="modal-form">
+      <p class="text-muted" style="margin-bottom:16px;font-size:13px"><i class="fas fa-coins" style="color:var(--warning);margin-right:5px"></i>Record a collective tip total without linking to a specific service.</p>
+      <div class="form-row cols-2">
+        <div class="form-group"><label>Date</label><input name="service_date" type="date" value="${today()}"></div>
+        <div class="form-group"><label>Tip Amount *</label><input name="tip_total" type="text" inputmode="numeric" required placeholder="0"></div>
+        <div class="form-group"><label>Currency</label>${currencySelect('tip_currency', 'USD', { id: 'tip-cur-ss' })}</div>
+        <div class="form-group"><label>Notes</label><input name="notes" placeholder="Optional…"></div>
+      </div>
+    </form>`, saveLabel: 'Record Tips', onSave: async () => {
+      if (!Modal.validate()) throw new Error('Please fill required fields');
+      const data   = Modal.getFormData();
+      const tipAmt = parseAmountInput(data.tip_total);
+      if (!tipAmt) throw new Error('Tip amount is required');
+      const cur    = data.tip_currency || 'USD';
+      await API.post('/transactions', {
+        service_date: data.service_date || today(),
+        client_name: '', plate_number: '', vehicle_type: 'car',
+        service_id: null, price: 0, quantity: 1, discount: 0,
+        currency: cur, payment_status: 'paid',
+        payment_currency: cur, amount_received: tipAmt, exchange_rate: 1,
+        notes: data.notes || 'Bulk tips'
+      });
+      Modal.close(); Toast.success('Tips recorded'); this.applyFilter();
+    }});
   },
 
   showAdd() {
@@ -421,7 +457,7 @@ const TransactionsPage = {
   },
 
   async deleteRecord(id) {
-    if (!confirmDelete()) return;
+    if (!await confirmDelete()) return;
     await API.delete(`/transactions/${id}`);
     Toast.success('Deleted'); this.applyFilter();
   }

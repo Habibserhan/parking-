@@ -132,6 +132,135 @@ const Modal = {
   }
 };
 
+// ---------- Searchable Select (SS) ----------
+const SS = {
+  // Generate HTML for a searchable select.
+  // opts = [{ value, label }]
+  html(name, opts, selected, { placeholder = 'Select…', id, onchange = '' } = {}) {
+    const uid = id || ('ss_' + Math.random().toString(36).slice(2, 8));
+    const sel = opts.find(o => String(o.value) === String(selected ?? ''));
+    const display = sel ? sel.label : '';
+    const cbAttr = onchange ? ` data-cb="${escHtml(onchange)}"` : '';
+    return `<div class="ss-wrap" id="${uid}"${cbAttr}>
+      <input type="hidden" name="${escHtml(name)}" value="${escHtml(String(selected ?? ''))}">
+      <div class="ss-trigger" tabindex="0" onclick="SS.toggle('${uid}')" onkeydown="SS.kd(event,'${uid}')">
+        <span class="ss-lbl" id="${uid}-lbl">${display ? escHtml(display) : `<span class="ss-ph">${escHtml(placeholder)}</span>`}</span>
+        <i class="fas fa-chevron-down ss-arr"></i>
+      </div>
+      <div class="ss-drop" id="${uid}-drop" style="display:none">
+        <input type="text" class="ss-srch" placeholder="Search…" oninput="SS.filter('${uid}',this.value)" onclick="event.stopPropagation()" autocomplete="off">
+        <div class="ss-list" id="${uid}-list">
+          ${opts.map(o => `<div class="ss-opt${String(o.value) === String(selected ?? '') ? ' ss-sel' : ''}" data-v="${escHtml(String(o.value))}" data-l="${escHtml(o.label)}" onclick="SS.pick('${uid}',this)">${escHtml(o.label)}</div>`).join('')}
+        </div>
+        <div class="ss-none" style="display:none">No results found</div>
+      </div>
+    </div>`;
+  },
+
+  toggle(uid) {
+    const drop    = document.getElementById(`${uid}-drop`);
+    const trigger = document.getElementById(`${uid}-drop`)?.previousElementSibling;
+    if (!drop) return;
+    const wasOpen = drop.style.display !== 'none';
+    this.closeAll();
+    if (!wasOpen) {
+      drop.style.display = '';
+      trigger?.classList.add('ss-open');
+      const srch = drop.querySelector('.ss-srch');
+      if (srch) { srch.value = ''; srch.focus(); this.filter(uid, ''); }
+    }
+  },
+
+  closeAll() {
+    document.querySelectorAll('.ss-drop').forEach(d => d.style.display = 'none');
+    document.querySelectorAll('.ss-trigger').forEach(t => t.classList.remove('ss-open'));
+  },
+
+  filter(uid, q) {
+    const list = document.getElementById(`${uid}-list`);
+    const none = document.getElementById(`${uid}-drop`)?.querySelector('.ss-none');
+    if (!list) return;
+    const lq = q.toLowerCase();
+    let shown = 0;
+    list.querySelectorAll('.ss-opt').forEach(o => {
+      const match = (o.dataset.l || o.textContent).toLowerCase().includes(lq);
+      o.style.display = match ? '' : 'none';
+      if (match) shown++;
+    });
+    if (none) none.style.display = shown ? 'none' : '';
+  },
+
+  pick(uid, el) {
+    const value = el.dataset.v;
+    const label = el.dataset.l;
+    const wrap  = document.getElementById(uid);
+    if (!wrap) return;
+    wrap.querySelector('input[type=hidden]').value = value;
+    const lbl = document.getElementById(`${uid}-lbl`);
+    if (lbl) lbl.innerHTML = escHtml(label);
+    this.closeAll();
+    document.getElementById(`${uid}-list`)?.querySelectorAll('.ss-opt').forEach(o => {
+      o.classList.toggle('ss-sel', o.dataset.v === value);
+    });
+    const cb = wrap.dataset.cb;
+    if (cb) try { eval(cb); } catch (e) { console.warn('SS cb:', e); }
+  },
+
+  // Rebuild options dynamically (e.g. after data loads or filter)
+  update(uid, opts, selected) {
+    const wrap = document.getElementById(uid);
+    const list = document.getElementById(`${uid}-list`);
+    if (!list || !wrap) return;
+    const sel = opts.find(o => String(o.value) === String(selected ?? '')) || opts[0];
+    list.innerHTML = opts.map(o => `<div class="ss-opt${sel && String(o.value) === String(sel.value) ? ' ss-sel' : ''}" data-v="${escHtml(String(o.value))}" data-l="${escHtml(o.label)}" onclick="SS.pick('${uid}',this)">${escHtml(o.label)}</div>`).join('')
+      || '<div class="ss-none">No options available</div>';
+    const hiddenInput = wrap.querySelector('input[type=hidden]');
+    const lbl = document.getElementById(`${uid}-lbl`);
+    if (hiddenInput) hiddenInput.value = sel ? sel.value : '';
+    if (lbl) lbl.innerHTML = sel ? escHtml(sel.label) : `<span class="ss-ph">Select…</span>`;
+  },
+
+  kd(e, uid) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.toggle(uid); }
+    if (e.key === 'Escape') this.closeAll();
+  }
+};
+
+// ---------- ConfirmDialog ----------
+const ConfirmDialog = {
+  show(msg, { title, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = false } = {}) {
+    return new Promise(resolve => {
+      document.getElementById('confirm-overlay')?.remove();
+      const el = document.createElement('div');
+      el.id = 'confirm-overlay';
+      el.className = 'modal-overlay';
+      const heading  = title || (danger ? 'Confirm Delete' : 'Confirm');
+      const iconHtml = danger
+        ? '<i class="fas fa-exclamation-triangle" style="color:var(--danger,#dc2626);margin-right:8px"></i>'
+        : '<i class="fas fa-question-circle" style="color:var(--primary);margin-right:8px"></i>';
+      const btnStyle = danger ? 'background:var(--danger,#dc2626);border-color:var(--danger,#dc2626);color:#fff' : '';
+      el.innerHTML = `
+        <div class="modal-box" style="max-width:400px">
+          <div class="modal-header">
+            <h3>${iconHtml}${escHtml(heading)}</h3>
+            <button class="modal-close" id="cd-close"><i class="fas fa-times"></i></button>
+          </div>
+          <div class="modal-body" style="padding:20px 24px;font-size:14.5px;line-height:1.65;color:var(--text)">${escHtml(msg)}</div>
+          <div class="modal-footer">
+            <button class="btn btn-outline" id="cd-cancel">${escHtml(cancelLabel)}</button>
+            <button class="btn btn-primary" id="cd-confirm" style="${btnStyle}">${escHtml(confirmLabel)}</button>
+          </div>
+        </div>`;
+      document.body.appendChild(el);
+      const done = r => { el.remove(); resolve(r); };
+      document.getElementById('cd-confirm').addEventListener('click', () => done(true));
+      document.getElementById('cd-cancel').addEventListener('click',  () => done(false));
+      document.getElementById('cd-close').addEventListener('click',   () => done(false));
+      el.addEventListener('click', e => { if (e.target === el) done(false); });
+    });
+  }
+};
+
 // ---------- Router ----------
 const Router = {
   pages: {},
@@ -313,14 +442,12 @@ function sumConverted(records, selectedCurrency, amountField = 'amount', currenc
     total + convertAmount(r[amountField], r[currencyField], selectedCurrency), 0);
 }
 
-// ---- Build <select> for per-record currency using the active currency list
-function currencySelect(name, selected) {
+// ---- Build searchable select for per-record currency using the active currency list
+function currencySelect(name, selected, { id, onchange } = {}) {
   const sel = selected || 'USD';
   const map = _getCurrencyMap();
-  const opts = Object.entries(map).map(([c, cfg]) =>
-    `<option value="${c}" ${c === sel ? 'selected' : ''}>${cfg.symbol} — ${cfg.name || c}</option>`
-  ).join('');
-  return `<select name="${name}">${opts}</select>`;
+  const opts = Object.entries(map).map(([c, cfg]) => ({ value: c, label: `${cfg.symbol} — ${cfg.name || c}` }));
+  return SS.html(name, opts, sel, { id, onchange, placeholder: 'Select currency…' });
 }
 
 // Get parking rates configured by admin
@@ -420,7 +547,7 @@ function vehicleBadge(type) {
 }
 
 function confirmDelete(msg = 'Are you sure you want to delete this record?') {
-  return window.confirm(msg);
+  return ConfirmDialog.show(msg, { confirmLabel: 'Delete', danger: true });
 }
 
 function exportCSV(rows, filename = 'export.csv') {
@@ -496,6 +623,8 @@ function showApp() {
 // ---------- Login ----------
 document.addEventListener('DOMContentLoaded', () => {
   Auth.init();
+  // Close SS dropdowns when clicking outside
+  document.addEventListener('click', e => { if (!e.target.closest('.ss-wrap')) SS.closeAll(); });
 
   // Login form
   const loginForm = document.getElementById('login-form');
@@ -518,8 +647,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Logout
-  document.getElementById('btn-logout')?.addEventListener('click', () => {
-    if (confirm('Are you sure you want to log out?')) Auth.logout();
+  document.getElementById('btn-logout')?.addEventListener('click', async () => {
+    if (await ConfirmDialog.show('Are you sure you want to log out?', { confirmLabel: 'Log Out', title: 'Log Out' })) Auth.logout();
   });
 
   // Nav clicks

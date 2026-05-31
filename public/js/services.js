@@ -129,7 +129,7 @@ const ServicesPage = {
   },
 
   async deleteService(id) {
-    if (!confirmDelete('Delete this service permanently? This cannot be undone.')) return;
+    if (!await confirmDelete('Delete this service permanently? This cannot be undone.')) return;
     try {
       await API.delete(`/services/${id}`);
       Toast.success('Service deleted');

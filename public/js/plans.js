@@ -113,14 +113,14 @@ const PlansPage = {
 
   async toggleActive(id, current) {
     const action = current ? 'deactivate' : 'activate';
-    if (!confirm(`Are you sure you want to ${action} this plan?`)) return;
+    if (!await ConfirmDialog.show(`Are you sure you want to ${action} this plan?`, { confirmLabel: action.charAt(0).toUpperCase() + action.slice(1), title: 'Confirm' })) return;
     await API.put(`/plans/${id}`, { ...this.data.find(p => p.id === id), is_active: current ? 0 : 1 });
     Toast.success(`Plan ${current ? 'deactivated' : 'activated'}`);
     Router.navigate('plans');
   },
 
   async deletePlan(id) {
-    if (!confirmDelete('Delete this plan permanently? This cannot be undone.')) return;
+    if (!await confirmDelete('Delete this plan permanently? This cannot be undone.')) return;
     try {
       await API.delete(`/plans/${id}`);
       Toast.success('Plan deleted');
