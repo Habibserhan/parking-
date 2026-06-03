@@ -18,7 +18,8 @@ router.get('/', authenticate, async (req, res) => {
     const dayEnd    = `${dateTo}T23:59:59`;
     const all = mode === 'all';
 
-    let parkQ        = sb.from('daily_parking').select('amount, currency').eq('parking_status', 'completed').eq('payment_status', 'paid');
+    let parkQ        = sb.from('daily_parking').select('amount, currency').eq('parking_status', 'completed').eq('payment_status', 'paid').is('third_party_company', null);
+    let thirdPartyRevQ = sb.from('daily_parking').select('amount, currency').eq('parking_status', 'completed').eq('payment_status', 'paid').not('third_party_company', 'is', null);
     let svcQ         = sb.from('service_transactions').select('final_amount, tip_amount, currency').eq('payment_status', 'paid');
     let expQ         = sb.from('expenses').select('amount, currency');
     let invQ         = sb.from('invoices').select('final_amount, paid_amount, currency, payment_status');
@@ -28,6 +29,7 @@ router.get('/', authenticate, async (req, res) => {
 
     if (!all) {
       parkQ          = parkQ.gte('entry_time', dayStart).lte('entry_time', dayEnd);
+      thirdPartyRevQ = thirdPartyRevQ.gte('entry_time', dayStart).lte('entry_time', dayEnd);
       svcQ           = svcQ.gte('service_date', dateFrom).lte('service_date', dateTo);
       expQ           = expQ.gte('expense_date', dateFrom).lte('expense_date', dateTo);
       invQ           = invQ.gte('invoice_month', monthFrom).lte('invoice_month', monthTo);
@@ -50,7 +52,7 @@ router.get('/', authenticate, async (req, res) => {
       thirdPartyQ = thirdPartyQ.gte('entry_time', dayStart).lte('entry_time', dayEnd);
     }
 
-    const [paidInvResult, parkResult, svcResult, expResult, activeVehicleResult, unpaidInvResult, parkedResult, thirdPartyResult, settingsResult, outstandingResult, paidInvCountResult] = await Promise.all([
+    const [paidInvResult, parkResult, thirdPartyRevResult, svcResult, expResult, activeVehicleResult, unpaidInvResult, parkedResult, thirdPartyResult, settingsResult, outstandingResult, paidInvCountResult] = await Promise.all([
       invQ.then(r => {
         if (!r.error) return r;
         let q = sb.from('invoices').select('final_amount, currency, payment_status');
@@ -58,6 +60,7 @@ router.get('/', authenticate, async (req, res) => {
         return q;
       }),
       parkQ,
+      thirdPartyRevQ,
       svcQ,
       expQ,
       activeQ,
@@ -96,6 +99,10 @@ router.get('/', authenticate, async (req, res) => {
       currency: r.currency,
       amount: (Number(r.amount) || 0) * (currencyMultipliers[r.currency || 'USD'] || 1)
     }));
+    const normalizedThirdPartyRevData = (thirdPartyRevResult.data || []).map(r => ({
+      currency: r.currency,
+      amount: (Number(r.amount) || 0) * (currencyMultipliers[r.currency || 'USD'] || 1)
+    }));
 
     // Revenue from invoices: paid=full amount, partially_paid=paid_amount (if column exists) else 0, unpaid=0
     const invoiceRevenueData = (paidInvResult.data || []).map(r => {
@@ -118,11 +125,12 @@ router.get('/', authenticate, async (req, res) => {
       tip:      Number(r.tip_amount) || 0
     }));
 
-    const subRevenueByCurrency      = byCur(invoiceRevenueData, 'final_amount');
-    const parkingRevenueByCurrency  = byCur(normalizedParkingData, 'amount');
-    const servicesRevenueByCurrency = byCur(svcWithTips, 'revenue');
-    const tipsRevenueByCurrency     = byCur(svcWithTips, 'tip');
-    const expensesByCurrency        = byCur(expResult.data     || [], 'amount');
+    const subRevenueByCurrency          = byCur(invoiceRevenueData, 'final_amount');
+    const parkingRevenueByCurrency      = byCur(normalizedParkingData, 'amount');
+    const thirdPartyRevenueByCurrency   = byCur(normalizedThirdPartyRevData, 'amount');
+    const servicesRevenueByCurrency     = byCur(svcWithTips, 'revenue');
+    const tipsRevenueByCurrency         = byCur(svcWithTips, 'tip');
+    const expensesByCurrency            = byCur(expResult.data || [], 'amount');
 
     // Outstanding balance = sum(final_amount - paid_amount) for unpaid + partial invoices
     const outstandingData = (outstandingResult.data || []).map(r => ({
@@ -150,7 +158,7 @@ router.get('/', authenticate, async (req, res) => {
     const thirdPartyParked = (thirdPartyResult.data || []).length;
 
     res.json({
-      stats: { totalRevenueByCurrency, subRevenueByCurrency, parkingRevenueByCurrency, servicesRevenueByCurrency, tipsRevenueByCurrency, expensesByCurrency, netProfitByCurrency, outstandingByCurrency, activeClients, unpaidClients, paidClients, currentlyParked, thirdPartyParked }
+      stats: { totalRevenueByCurrency, subRevenueByCurrency, parkingRevenueByCurrency, thirdPartyRevenueByCurrency, servicesRevenueByCurrency, tipsRevenueByCurrency, expensesByCurrency, netProfitByCurrency, outstandingByCurrency, activeClients, unpaidClients, paidClients, currentlyParked, thirdPartyParked }
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -185,7 +193,7 @@ router.get('/details', authenticate, async (req, res) => {
     if (type === 'parking-revenue') {
       let q = sb.from('daily_parking')
         .select('plate_number, vehicle_type, entry_time, exit_time, duration_minutes, amount, currency, third_party_company, card_number')
-        .eq('parking_status', 'completed').eq('payment_status', 'paid').order('entry_time', { ascending: false });
+        .eq('parking_status', 'completed').eq('payment_status', 'paid').is('third_party_company', null).order('entry_time', { ascending: false });
       if (!all) q = q.gte('entry_time', dayStart).lte('entry_time', dayEnd);
       const { data } = await q;
       return res.json(data || []);
@@ -257,7 +265,7 @@ router.get('/details', authenticate, async (req, res) => {
 
     if (type === 'third-party-parked') {
       let q = sb.from('daily_parking')
-        .select('plate_number, vehicle_type, entry_time, exit_time, parking_status, notes, third_party_company')
+        .select('plate_number, vehicle_type, entry_time, exit_time, parking_status, notes, third_party_company, amount, currency')
         .not('third_party_company', 'is', null)
         .order('entry_time', { ascending: false });
       if (all) {

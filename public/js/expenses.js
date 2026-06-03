@@ -11,8 +11,9 @@ const ExpensesPage = {
   TYPES: ['salary', 'salary_advance', 'rent', 'electricity', 'water', 'maintenance', 'other'],
 
   async render() {
+    const todayDate = today();
     [this.data, this.employees] = await Promise.all([
-      API.get('/expenses'),
+      API.get(`/expenses?date_from=${todayDate}&date_to=${todayDate}`),
       API.get('/employees?status=active').catch(() => [])
     ]);
     return `
@@ -37,8 +38,8 @@ const ExpensesPage = {
           <option value="">All Types</option>
           ${this.TYPES.map(t => `<option value="${t}">${t.charAt(0).toUpperCase()+t.slice(1)}</option>`).join('')}
         </select>
-        <input type="date" id="exp-from">
-        <input type="date" id="exp-to">
+        <input type="date" id="exp-from" value="${todayDate}">
+        <input type="date" id="exp-to" value="${todayDate}">
         <button class="btn btn-outline" onclick="ExpensesPage.exportReport()"><i class="fas fa-download"></i> Export</button>
       </div>
       <div class="card">

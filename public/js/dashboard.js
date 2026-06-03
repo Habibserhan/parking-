@@ -148,7 +148,7 @@ const DashboardPage = {
         return [
           this._card('fa-car',      'cyan',   'Parking Revenue',                              this._fmtByCurrency(s.parkingRevenueByCurrency), period,                                                 'parking-revenue'),
           this._card('fa-parking',  'cyan',   all ? 'Currently Parked' : 'Vehicles Parked',  parkedVal, all ? 'Live — in lot now' : `Entered on ${period}`,                                           'currently-parked'),
-          this._card('fa-building', 'purple', all ? 'Third Party Parked' : 'Third Party — This Day', s.thirdPartyParked, all ? 'Company vehicles in lot' : `Company vehicles on ${period}`,           'third-party-parked'),
+          this._card('fa-building', 'purple', 'Third Party Revenue', this._fmtByCurrency(s.thirdPartyRevenueByCurrency), all ? 'Company vehicle revenue' : `Company vehicles on ${period}`,           'third-party-parked'),
         ];
       })()),
       this._section('fa-shower', 'Services Overview', [
@@ -505,7 +505,7 @@ const DashboardPage = {
     }
 
     if (type === 'third-party-parked') return `<table>
-      <thead><tr><th>Plate</th><th>Type</th><th>Company</th><th>Entry Time</th><th>Exit Time</th><th>Duration</th><th>Status</th><th>Notes</th></tr></thead>
+      <thead><tr><th>Plate</th><th>Type</th><th>Company</th><th>Entry Time</th><th>Exit Time</th><th>Duration</th><th>Amount</th><th>Status</th><th>Notes</th></tr></thead>
       <tbody>${data.map(r => {
         const endTime = r.exit_time ? new Date(r.exit_time) : Date.now();
         const mins = Math.round((endTime - new Date(r.entry_time)) / 60000);
@@ -516,6 +516,7 @@ const DashboardPage = {
           <td>${fmtDateTime(r.entry_time)}</td>
           <td>${r.exit_time ? fmtDateTime(r.exit_time) : '<span class="badge badge-success">Still inside</span>'}</td>
           <td>${fmtDuration(mins)}</td>
+          <td class="fw-bold">${r.amount != null ? fmtAmt(r.amount, r.currency) : '<span class="text-muted">—</span>'}</td>
           <td>${statusBadge(r.parking_status)}</td>
           <td class="text-muted">${escHtml(r.notes || '—')}</td>
         </tr>`;
@@ -530,7 +531,7 @@ const DashboardPage = {
       'parking-revenue': 'Parking Revenue', 'services-revenue': 'Services Revenue',
       'expenses': 'Expenses', 'net-profit': 'Net Profit',
       'active-subscribers': 'Active Subscribers', 'unpaid-subscribers': 'Unpaid Subscribers',
-      'currently-parked': 'Vehicles Parked', 'third-party-parked': 'Third Party Vehicles',
+      'currently-parked': 'Vehicles Parked', 'third-party-parked': 'Third Party Revenue',
       'outstanding-balance':  'Outstanding Client Balances',
       'paid-subscriptions':   'Paid Subscriptions',
       'tips-revenue':         'Tips Revenue'
