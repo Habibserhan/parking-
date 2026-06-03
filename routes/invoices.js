@@ -174,7 +174,19 @@ router.get('/', authenticate, async (req, res) => {
     if (client_id)      query = query.eq('client_id', client_id);
     const { data } = await query;
 
-    let result = (data || []).map(flattenInvoice);
+    // Build plan map as fallback for when the FK join doesn't resolve
+    const planIds = [...new Set((data || []).map(i => i.subscription_plan_id).filter(Boolean))];
+    let planMap = {};
+    if (planIds.length) {
+      const { data: plans } = await sb.from('subscription_plans').select('id, name').in('id', planIds);
+      (plans || []).forEach(p => { planMap[p.id] = p.name; });
+    }
+
+    let result = (data || []).map(i => {
+      const flat = flattenInvoice(i);
+      if (!flat.plan_name && i.subscription_plan_id) flat.plan_name = planMap[i.subscription_plan_id] || null;
+      return flat;
+    });
     if (search) {
       const s = search.toLowerCase();
       result = result.filter(i =>
@@ -195,7 +207,12 @@ router.get('/:id', authenticate, async (req, res) => {
       .eq('id', req.params.id).maybeSingle();
     if (!inv) return res.status(404).json({ error: 'Invoice not found' });
     const { data: settings } = await sb.from('settings').select('*').eq('id', 1).maybeSingle();
-    res.json({ ...flattenInvoice(inv), settings });
+    const flat = flattenInvoice(inv);
+    if (!flat.plan_name && inv.subscription_plan_id) {
+      const { data: plan } = await sb.from('subscription_plans').select('name').eq('id', inv.subscription_plan_id).maybeSingle();
+      if (plan) flat.plan_name = plan.name;
+    }
+    res.json({ ...flat, settings });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
