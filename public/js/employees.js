@@ -7,6 +7,7 @@ const EmployeesPage = {
   data: [],       // employees
   _expenses: [],  // salary expenses for selected month
   _month: '',
+  _advanceMonthData: null, // cached data for live advance preview
 
   async render() {
     this._month = currentMonth();
@@ -100,7 +101,7 @@ const EmployeesPage = {
       const empExp    = this._expenses.filter(e => String(e.employee_id) === String(emp.id));
       const advances  = empExp.filter(e => e.expense_type === 'salary_advance').reduce((s, e) => s + (Number(e.amount) || 0), 0);
       const paid      = empExp.filter(e => e.expense_type === 'salary').reduce((s, e) => s + (Number(e.amount) || 0), 0);
-      const remaining = Math.max(0, effective - advances - paid);
+      const remaining = effective - advances - paid;
       return { ...emp, effective_salary: effective, is_prorated: isProrated, advances, paid, remaining };
     });
   },
@@ -177,7 +178,8 @@ const EmployeesPage = {
             onchange="EmployeesPage._recalcAdvanceInfo(${employeeId}, this.value)">
         </div>
         <div class="form-group"><label>Amount *</label>
-          <input name="amount" type="text" inputmode="numeric" required placeholder="0">
+          <input name="amount" type="text" inputmode="numeric" required placeholder="0"
+            oninput="EmployeesPage._previewAdvanceAmount(this.value, '${emp.currency || 'USD'}')">
         </div>
         <div class="form-group"><label>Currency</label>
           ${currencySelect('currency', emp.currency || 'USD')}
@@ -190,10 +192,18 @@ const EmployeesPage = {
     </form>`, saveLabel: 'Save Advance', onSave: async () => {
       if (!Modal.validate()) throw new Error('Please fill required fields');
       const data = Modal.getFormData();
+      const newAmount = parseAmountInput(data.amount);
+      if (this._advanceMonthData) {
+        const { effective, advances, paid } = this._advanceMonthData;
+        const remaining = effective - advances - paid;
+        if (newAmount > remaining) {
+          throw new Error(`Advance exceeds remaining salary. Maximum allowed: ${fmtRaw(Math.max(0, remaining), emp.currency)}`);
+        }
+      }
       await API.post('/expenses', {
         expense_type:  'salary_advance',
         title:         `Salary Advance — ${emp.name}`,
-        amount:        parseAmountInput(data.amount),
+        amount:        newAmount,
         expense_date:  data.expense_date,
         salary_month:  data.salary_month || this._month,
         employee_id:   emp.id,
@@ -216,7 +226,8 @@ const EmployeesPage = {
     const effective = this._getProratedSalary(emp, month);
     const advances  = expenses.filter(e => e.expense_type === 'salary_advance').reduce((s, e) => s + (Number(e.amount) || 0), 0);
     const paid      = expenses.filter(e => e.expense_type === 'salary').reduce((s, e) => s + (Number(e.amount) || 0), 0);
-    const remaining = Math.max(0, effective - advances - paid);
+    const remaining = effective - advances - paid;
+    this._advanceMonthData = { advances, paid, effective, remaining, currency: emp.currency };
     const infoEl    = document.getElementById('adv-info');
     if (!infoEl) return;
     if (advances > 0 || paid > 0) {
@@ -226,11 +237,36 @@ const EmployeesPage = {
         <strong>${month}:</strong>
         Advances: <strong>${fmtRaw(advances, emp.currency)}</strong> &nbsp;·&nbsp;
         Paid: <strong>${fmtRaw(paid, emp.currency)}</strong> &nbsp;·&nbsp;
-        Remaining: <strong style="color:${remaining > 0 ? 'var(--danger)' : 'var(--success)'}">${remaining > 0 ? fmtRaw(remaining, emp.currency) : '✓ Fully Paid'}</strong>
+        Remaining: <strong style="color:${remaining > 0 ? 'var(--danger)' : remaining < 0 ? 'var(--warning)' : 'var(--success)'}">${remaining > 0 ? fmtRaw(remaining, emp.currency) : remaining < 0 ? `Overdraft ${fmtRaw(Math.abs(remaining), emp.currency)}` : '✓ Fully Paid'}</strong>
       </div>`;
     } else {
       infoEl.style.display = 'none';
     }
+    // Refresh preview if an amount is already typed
+    const amtInput = document.querySelector('#modal-form input[name="amount"]');
+    if (amtInput?.value) this._previewAdvanceAmount(amtInput.value, emp.currency);
+  },
+
+  _previewAdvanceAmount(inputValue, currency) {
+    const d = this._advanceMonthData;
+    if (!d) return;
+    const newAmount = parseAmountInput(inputValue);
+    if (!newAmount) return;
+    const remainingAfter = d.effective - d.advances - d.paid - newAmount;
+    const infoEl = document.getElementById('adv-info');
+    if (!infoEl) return;
+    const isOver = remainingAfter < 0;
+    infoEl.style.display = '';
+    infoEl.innerHTML = `<div style="padding:10px 14px;background:${isOver ? '#fef2f2' : '#fefce8'};border-radius:8px;border:1px solid ${isOver ? '#fecaca' : '#fde047'};font-size:13px">
+      <i class="fas fa-${isOver ? 'exclamation-circle' : 'calculator'}" style="color:${isOver ? 'var(--danger)' : 'var(--warning)'};margin-right:6px"></i>
+      ${isOver
+        ? `<strong style="color:var(--danger)">Exceeds remaining salary.</strong> Maximum allowed: <strong>${fmtRaw(Math.max(0, d.effective - d.advances - d.paid), currency)}</strong>`
+        : `After this advance &nbsp;·&nbsp; Advances total: <strong>${fmtRaw(d.advances + newAmount, currency)}</strong> &nbsp;·&nbsp;
+           Remaining: <strong style="color:${remainingAfter > 0 ? 'var(--danger)' : 'var(--success)'}">
+             ${remainingAfter > 0 ? fmtRaw(remainingAfter, currency) : '✓ Fully Paid'}
+           </strong>`
+      }
+    </div>`;
   },
 
   // ── Pay Salary ──────────────────────────────────────────
@@ -301,7 +337,7 @@ const EmployeesPage = {
     const isProrated = effective !== (Number(emp.monthly_salary) || 0);
     const advances  = expenses.filter(e => e.expense_type === 'salary_advance').reduce((s, e) => s + (Number(e.amount) || 0), 0);
     const paid      = expenses.filter(e => e.expense_type === 'salary').reduce((s, e) => s + (Number(e.amount) || 0), 0);
-    const remaining = Math.max(0, effective - advances - paid);
+    const remaining = effective - advances - paid;
 
     // Update amount field
     const amtEl = document.getElementById('pay-amount');
@@ -382,7 +418,7 @@ const EmployeesPage = {
   },
 
   async deleteRecord(id) {
-    if (!confirmDelete('Delete this employee? All salary records remain in expenses.')) return;
+    if (!await confirmDelete('Delete this employee? All salary records remain in expenses.')) return;
     await API.delete(`/employees/${id}`);
     Toast.success('Employee deleted');
     await this._loadData();
